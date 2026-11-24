@@ -30,6 +30,7 @@ jobs:
 
       - name: Run monitor
         env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GREENAPI_URL: ${{ secrets.GREENAPI_URL }}
           GREENAPI_INSTANCE: ${{ secrets.GREENAPI_INSTANCE }}
