@@ -703,6 +703,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--test-send", action="store_true")
+    ap.add_argument("--demo", action="store_true", help="send the single most important current story, whatever its score")
     args = ap.parse_args()
     with open(CONFIG_PATH, encoding="utf-8") as f:
         cfg = json.load(f)
@@ -711,6 +712,14 @@ def main():
         ok, ch = send_whatsapp("✅ Market Alerts: تجربة. إلى وصلاتك هاد الرسالة، WhatsApp خدام مزيان. 🚀")
         log("test send:", "OK via " + ch if ok else "FAILED " + ch)
         sys.exit(0 if ok else 1)
+
+    if args.demo:  # one real analysed alert so the user can see the format; state is NOT saved
+        demo_cfg = dict(cfg, impact_threshold=0, max_alerts_per_run=1, max_item_age_minutes=720, max_candidates_per_run=40)
+        demo_state = load_state()
+        demo_state.update(seen={}, alerts=[], pending=[])
+        sent = run(demo_cfg, demo_state, sender=lambda m: send_whatsapp("🧪 *تجربة — مثال على تنبيه*\n\n" + m))
+        log("demo:", "sent" if sent else "nothing sent")
+        sys.exit(0 if sent else 1)
 
     state = load_state()
     try:
