@@ -14,7 +14,11 @@
  *   CHAT_ID            e.g. 2126XXXXXXXX  (the only chat the bot listens to and answers)
  */
 
-const MODELS = ["gemini-3.5-flash", "gemini-2.5-flash", "gemini-3.1-flash-lite", "gemini-2.5-flash-lite"];
+// Fastest first. Cloudflare free plan cancels background work ~30 s after the webhook returns,
+// so every step has a hard timeout and the whole answer must finish in ~25 s.
+const MODELS = ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-3.1-flash-lite"];
+const NO_THINK = { "gemini-2.5-flash-lite": true, "gemini-2.5-flash": true };
+const BUDGET_MS = 25000;
 const UA = { "User-Agent": "Mozilla/5.0 (MarketQABot)" };
 
 export default {
@@ -52,47 +56,54 @@ export function parseWebhook(b, env) {
 
 // ---------------------------------------------------------------- main flow
 async function handle(msg, env) {
-  const intent = await understand(msg.text, env);
+  const deadline = Date.now() + BUDGET_MS;
+  const intent = await understand(msg.text, env, deadline);
   if (intent.type === "chat" || !intent.symbols || !intent.symbols.length) {
-    const reply = intent.reply || "🤖 صيفط ليا سمية سهم ولا عملة (مثلا: *Nvidia*، *BTC*، *واش مزيان نشري Tesla دابا؟*) ونعطيك تحليل.";
+    const reply = intent.reply || "صيفط ليا سمية سهم ولا عملة (مثلا: *Nvidia*، *BTC*، *واش مزيان نشري Tesla دابا؟*) ونعطيك تحليل.";
     return send(env, msg.chat, reply.startsWith("🤖") ? reply : "🤖 " + reply);
   }
-  await send(env, msg.chat, `🤖 كنحلل ${intent.symbols.join(", ")}... (شي 20 ثانية)`);
-  const data = [];
-  for (const s of intent.symbols.slice(0, 2)) {
-    const [px, news] = await Promise.all([priceData(s), headlines(s, intent.names && intent.names[s])]);
-    data.push({ symbol: s, price: px, news });
-  }
-  const answer = await analyse(msg.text, data, env);
+  const syms = intent.symbols.slice(0, 2);
+  const [, data] = await Promise.all([
+    send(env, msg.chat, `🤖 كنحلل ${syms.join(", ")}...`),
+    Promise.all(syms.map(async s => {
+      const [px, news] = await Promise.all([priceData(s), headlines(s, intent.names && intent.names[s])]);
+      return { symbol: s, price: px, news };
+    })),
+  ]);
+  const answer = await analyse(msg.text, data, env, deadline);
   await send(env, msg.chat, answer);
 }
 
 // ---------------------------------------------------------------- Gemini
-async function gemini(env, system, user, json = true, maxTokens = 2048) {
+async function gemini(env, system, user, json = true, maxTokens = 2048, deadline = Date.now() + 20000) {
   let last;
   for (const model of MODELS) {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: system }] },
-        contents: [{ role: "user", parts: [{ text: user }] }],
-        generationConfig: Object.assign({ maxOutputTokens: Math.max(4096, maxTokens * 3), temperature: 0.3 },
-          json ? { responseMimeType: "application/json" } : {}),
-      }),
-    });
-    if (r.ok) {
-      const j = await r.json();
-      const parts = (((j.candidates || [])[0] || {}).content || {}).parts || [];
-      const t = parts.filter(p => !p.thought).map(p => p.text || "").join("");
-      if (t.trim()) return t;
-      last = "empty response";
-    } else {
-      last = `${model} HTTP ${r.status}`;
-    }
+    const left = deadline - Date.now();
+    if (left < 2500) break;
+    const gc = { maxOutputTokens: maxTokens, temperature: 0.3 };
+    if (json) gc.responseMimeType = "application/json";
+    if (NO_THINK[model]) gc.thinkingConfig = { thinkingBudget: 0 };
+    try {
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
+        body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] },
+                               contents: [{ role: "user", parts: [{ text: user }] }], generationConfig: gc }),
+        signal: AbortSignal.timeout(Math.min(12000, left - 500)),
+      });
+      if (r.ok) {
+        const j = await r.json();
+        const parts = (((j.candidates || [])[0] || {}).content || {}).parts || [];
+        const t = parts.filter(p => !p.thought).map(p => p.text || "").join("");
+        if (t.trim()) return t;
+        last = model + " empty";
+      } else {
+        last = `${model} HTTP ${r.status} ${(await r.text()).slice(0, 120)}`;
+      }
+    } catch (e) { last = `${model} ${e.name || e}`; }
     console.log("gemini fallback:", last);
   }
-  throw new Error("all Gemini models failed: " + last);
+  throw new Error("Gemini failed: " + last);
 }
 
 function extractJSON(t) {
@@ -108,9 +119,34 @@ Return ONLY JSON: {"type":"asset"|"chat","symbols":[...],"names":{"SYM":"Company
   stocks like NVDA, AAPL, TSLA; crypto as BTC-USD, ETH-USD, SOL-USD, XRP-USD; indices ^GSPC (S&P 500), ^IXIC (Nasdaq), ^DJI; gold GC=F; oil CL=F; EURUSD=X; Moroccan stocks are not supported (say so in reply with type chat).
 - type "chat" otherwise (greetings, help, unclear). reply = short helpful Darija answer (Arabic script) explaining they can send a stock/crypto name for an analysis.`;
 
-async function understand(text, env) {
+const ALIASES = [
+  [/\b(btc|bitcoin|bitcoine)\b|بيتكوين|بتكوين/i, "BTC-USD", "Bitcoin"], [/\b(eth|ethereum|ether)\b|إيثيريوم|ايثريوم|إيثريوم/i, "ETH-USD", "Ethereum"],
+  [/\b(sol|solana)\b|سولانا/i, "SOL-USD", "Solana"], [/\b(xrp|ripple)\b|ريبل/i, "XRP-USD", "XRP"], [/\b(bnb|binance coin)\b/i, "BNB-USD", "BNB"],
+  [/\b(doge|dogecoin)\b|دوج/i, "DOGE-USD", "Dogecoin"], [/\b(ada|cardano)\b/i, "ADA-USD", "Cardano"],
+  [/\bnvidia\b|نفيديا|انفيديا|إنفيديا/i, "NVDA", "Nvidia"], [/\btesla\b|تسلا|تيسلا/i, "TSLA", "Tesla"], [/\bapple\b|آبل/i, "AAPL", "Apple"],
+  [/\bmicrosoft\b|مايكروسوفت/i, "MSFT", "Microsoft"], [/\bamazon\b|أمازون|امازون/i, "AMZN", "Amazon"], [/\b(meta|facebook)\b|ميتا|فيسبوك/i, "META", "Meta"],
+  [/\b(google|alphabet)\b|جوجل|غوغل/i, "GOOGL", "Alphabet"], [/\bnetflix\b|نتفليكس/i, "NFLX", "Netflix"], [/\bamd\b/i, "AMD", "AMD"],
+  [/\b(coinbase)\b|كوينبيس/i, "COIN", "Coinbase"], [/\b(microstrategy|strategy mstr)\b/i, "MSTR", "Strategy"], [/\bpalantir\b/i, "PLTR", "Palantir"],
+  [/\b(s&p|sp500|s&p 500|spx)\b/i, "^GSPC", "S&P 500"], [/\bnasdaq\b|ناسداك/i, "^IXIC", "Nasdaq"], [/\b(dow|dow jones)\b/i, "^DJI", "Dow Jones"],
+  [/\b(gold|xau)\b|الذهب|الدهب/i, "GC=F", "Gold"], [/\b(oil|petrole|pétrole|wti)\b|البترول|النفط/i, "CL=F", "Crude oil"],
+  [/\b(eurusd|eur\/usd)\b/i, "EURUSD=X", "EUR/USD"],
+];
+
+export function localSymbols(text) {
+  const out = [], names = {};
+  for (const [re, sym, name] of ALIASES) if (re.test(text) && !out.includes(sym)) { out.push(sym); names[sym] = name; }
+  for (const m of text.matchAll(/\$?\b([A-Z]{2,5})\b/g)) {           // explicit tickers like TSLA, $PLTR
+    const t = m[1];
+    if (!out.includes(t) && !["USD", "ETF", "CEO", "IPO", "SEC", "FED", "AI", "OK"].includes(t) && !out.some(x => x.startsWith(t))) { out.push(t); names[t] = t; }
+  }
+  return out.length ? { type: "asset", symbols: out.slice(0, 2), names } : null;
+}
+
+async function understand(text, env, deadline) {
+  const local = localSymbols(text);
+  if (local) return local;
   try {
-    const j = extractJSON(await gemini(env, INTENT_SYSTEM, text, true, 300));
+    const j = extractJSON(await gemini(env, INTENT_SYSTEM, text, true, 300, Math.min(deadline, Date.now() + 8000)));
     j.symbols = (j.symbols || []).map(s => String(s).toUpperCase().trim()).filter(s => /^[\^A-Z0-9.=\-]{1,12}$/.test(s));
     return j;
   } catch (e) {
@@ -134,17 +170,23 @@ Format (WhatsApp, <= 1300 characters, short lines, emojis as section markers):
 🧭 شنو تراقب قبل ما تقرر: 2-3 نقط (مثلا تأكيد الكسر، earnings، الفيد، حجم التداول)
 End with exactly: "ℹ️ هادا تحليل ماشي نصيحة شراء ولا بيع — القرار ديالك."`;
 
-async function analyse(question, data, env) {
+async function analyse(question, data, env, deadline = Date.now() + 20000) {
   const user = `QUESTION: ${question}\n\nDATA:\n${JSON.stringify(data, null, 1)}`;
   try {
-    let t = await gemini(env, ANALYSIS_SYSTEM, user, false, 900);
+    let t = await gemini(env, ANALYSIS_SYSTEM, user, false, 900, deadline - 1500);
     t = t.trim();
     if (!t.includes("القرار ديالك")) t += "\n\nℹ️ هادا تحليل ماشي نصيحة شراء ولا بيع — القرار ديالك.";
     return t.slice(0, 3500);
   } catch (e) {
-    const d = data[0] || {};
-    const p = d.price || {};
-    return `🤖 الذكاء الاصطناعي مشغول دابا. هادي الأرقام الخام:\n${d.symbol}: ${p.last ?? "?"} (${p.chg1d ?? "?"}% اليوم)\nSMA20 ${p.sma20 ?? "?"} · SMA50 ${p.sma50 ?? "?"}\nsupport ${p.support20 ?? "?"} · resistance ${p.resistance20 ?? "?"}\nعاود سول من بعد شوية.`;
+    console.log("analysis fallback:", e && e.message);
+    const lines = data.map(d => {
+      const p = d.price || {};
+      if (p.error) return `• ${d.symbol}: ما لقيتش الثمن دابا`;
+      const trend = p.sma20 && p.sma50 ? (p.last > p.sma20 && p.sma20 > p.sma50 ? "طالع 📈" : p.last < p.sma20 && p.sma20 < p.sma50 ? "هابط 📉" : "متردد ↔️") : "؟";
+      return `*${d.symbol}*: ${p.last} ${p.currency || ""}\nاليوم ${p.chg1d}% · سيمانة ${p.chg5d}% · شهر ${p.chg1m}%\nالاتجاه: ${trend} (SMA20 ${p.sma20} / SMA50 ${p.sma50})\nRSI14: ${p.rsi14}\nsupport ${p.support20} · resistance ${p.resistance20}` +
+             (d.news && d.news.length ? `\n📰 ${d.news.slice(0, 2).map(n => n.title).join("\n📰 ")}` : "");
+    });
+    return `🤖 الأرقام (التحليل الكامل ما وصلش فالوقت، Gemini مشغول):\n\n${lines.join("\n\n")}\n\nℹ️ هادا ماشي نصيحة شراء ولا بيع — القرار ديالك.`;
   }
 }
 
@@ -177,7 +219,7 @@ function rsi(c, n) {
 
 async function priceData(symbol) {
   try {
-    const r = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=6mo&interval=1d`, { headers: UA });
+    const r = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=6mo&interval=1d`, { headers: UA, signal: AbortSignal.timeout(5000) });
     if (r.ok) {
       const j = await r.json();
       const res = j.chart && j.chart.result && j.chart.result[0];
@@ -190,7 +232,7 @@ async function priceData(symbol) {
   } catch (e) { console.log("yahoo error", e); }
   try { // fallback: Stooq daily CSV
     const s = symbol.endsWith("-USD") ? symbol.replace("-USD", "usd").toLowerCase() : symbol.toLowerCase() + ".us";
-    const r = await fetch(`https://stooq.com/q/d/l/?s=${s}&i=d`, { headers: UA });
+    const r = await fetch(`https://stooq.com/q/d/l/?s=${s}&i=d`, { headers: UA, signal: AbortSignal.timeout(4000) });
     const rows = (await r.text()).trim().split("\n").slice(1).map(l => l.split(",")).filter(x => x.length >= 5).slice(-130);
     if (rows.length) return summarize(symbol, rows.map(x => +x[4]), rows.map(x => +x[2]), rows.map(x => +x[3]), { asOf: rows[rows.length - 1][0] });
   } catch (e) { console.log("stooq error", e); }
@@ -200,7 +242,7 @@ async function priceData(symbol) {
 async function headlines(symbol, name) {
   const q = encodeURIComponent(`${name || symbol.replace("-USD", "").replace("^", "")} ${symbol.includes("-USD") ? "crypto" : "stock"} when:3d`);
   try {
-    const r = await fetch(`https://news.google.com/rss/search?q=${q}&hl=en-US&gl=US&ceid=US:en`, { headers: UA });
+    const r = await fetch(`https://news.google.com/rss/search?q=${q}&hl=en-US&gl=US&ceid=US:en`, { headers: UA, signal: AbortSignal.timeout(4000) });
     if (!r.ok) return [];
     const x = await r.text();
     return [...x.matchAll(/<item>[\s\S]*?<title>([\s\S]*?)<\/title>[\s\S]*?<pubDate>([\s\S]*?)<\/pubDate>/g)]

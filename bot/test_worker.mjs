@@ -1,11 +1,11 @@
 // Offline test of the WhatsApp Q&A worker with mocked Gemini, Yahoo, Google News and Green-API.
-import worker, { parseWebhook, summarize } from "./worker.js";
+import worker, { parseWebhook, summarize, localSymbols } from "./worker.js";
 import assert from "node:assert/strict";
 
 const env = { GEMINI_API_KEY: "g", GREENAPI_TOKEN: "t", GREENAPI_URL: "https://7107.api.greenapi.com",
               GREENAPI_INSTANCE: "710700000000", CHAT_ID: "212600000000" };
 const sent = [];
-let geminiCalls = 0, yahooOk = true;
+let geminiCalls = 0, yahooOk = true, geminiHang = false;
 
 const closes = Array.from({ length: 120 }, (_, i) => 100 + i * 0.5);
 globalThis.fetch = async (url, opt = {}) => {
@@ -18,7 +18,9 @@ globalThis.fetch = async (url, opt = {}) => {
       ? (b.contents[0].parts[0].text.includes("salam") ? JSON.stringify({ type: "chat", symbols: [], reply: "مرحبا! صيفط ليا سمية سهم." })
                                                        : JSON.stringify({ type: "asset", symbols: ["nvda"], names: { NVDA: "Nvidia" } }))
       : "🤖 *NVDA — تحليل*\n💵 ...\nℹ️ هادا تحليل ماشي نصيحة شراء ولا بيع — القرار ديالك.";
-    if (url.includes("gemini-3.5-flash") && geminiCalls === 1) return new Response("busy", { status: 503 }); // fallback path
+    if (geminiHang) return new Promise((_, rej) => opt.signal.addEventListener("abort", () => rej(Object.assign(new Error("timeout"), { name: "TimeoutError" }))));
+    if (url.includes("gemini-2.5-flash-lite") && geminiCalls === 1) return new Response("busy", { status: 503 }); // fallback path
+    assert.ok(!url.includes("2.5") || b.generationConfig.thinkingConfig.thinkingBudget === 0, "thinking disabled on 2.5 models");
     return Response.json({ candidates: [{ content: { parts: [{ text }] } }] });
   }
   if (url.includes("finance.yahoo")) {
@@ -56,7 +58,7 @@ ok(!parseWebhook(hook("outgoingMessageReceived", "🔴 *Fed cuts*"), env), "igno
 await call(hook("outgoingMessageReceived", "wach mzyan nchri nvidia daba?"));
 ok(sent.length === 2 && sent[0].message.includes("NVDA") && sent[1].message.includes("القرار ديالك"), "asset question -> 'analysing' + Darija analysis");
 ok(sent.every(s => s.chatId === "212600000000@c.us"), "replies only to the configured chat");
-ok(geminiCalls >= 3, "Gemini fell back after a 503");
+ok(geminiCalls === 2, "symbol found locally (no AI call) + Gemini fell back after a 503");
 
 // chat flow
 sent.length = 0;
@@ -67,6 +69,21 @@ ok(sent.length === 1 && sent[0].message.startsWith("🤖"), "greeting -> short h
 sent.length = 0; yahooOk = false;
 await call(hook("outgoingMessageReceived", "nvidia"));
 ok(sent.length === 2, "Yahoo down -> Stooq fallback still answers");
+
+// local symbol detection (Darija / Arabic / French / tickers)
+ok(localSymbols("wach mzyan nchri bitcoin daba?").symbols[0] === "BTC-USD", "Latin Darija 'bitcoin' -> BTC-USD");
+ok(localSymbols("شنو كتقول على تسلا").symbols[0] === "TSLA", "Arabic script 'تسلا' -> TSLA");
+ok(localSymbols("analyse $PLTR stp").symbols[0] === "PLTR", "explicit $ticker");
+ok(localSymbols("salam labas") === null, "no asset -> falls through to AI/help");
+
+// Gemini hangs -> must still answer before Cloudflare's 30 s cut-off, with raw numbers
+sent.length = 0; yahooOk = true; geminiHang = true;
+const keepAlive = setInterval(() => {}, 1000); // Node unrefs AbortSignal.timeout timers
+const t0 = Date.now();
+await call(hook("outgoingMessageReceived", "nvidia"));
+const took = Date.now() - t0;
+ok(sent.length === 2 && sent[1].message.includes("support") && took < 27000, `Gemini hang -> raw-numbers answer in ${Math.round(took/1000)}s (<27s)`);
+geminiHang = false; clearInterval(keepAlive);
 
 // math
 const s = summarize("T", closes, closes.map(x => x + 1), closes.map(x => x - 1), { price: 160 });
