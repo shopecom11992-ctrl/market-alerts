@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "run | dry-run | test-send"
+        description: "run | dry-run | test-send | demo"
         default: "test-send"
         required: true
 
@@ -51,6 +51,7 @@ jobs:
           case "$MODE" in
             test-send) python monitor.py --test-send ;;
             dry-run)   python monitor.py --dry-run ;;
+            demo)      python monitor.py --demo ;;
             *)         python monitor.py ;;
           esac
 
