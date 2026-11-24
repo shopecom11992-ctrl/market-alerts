@@ -1,0 +1,55 @@
+{
+  "max_item_age_minutes": 180,
+  "impact_threshold": 8,
+  "max_alerts_per_run": 3,
+  "dedupe_window_hours": 36,
+  "seen_retention_hours": 96,
+  "heartbeat_hour_local": 9,
+  "timezone": "Africa/Casablanca",
+  "triage_model": "claude-haiku-5-5",
+  "analysis_model": "claude-sonnet-5-5",
+  "darija_script": "arabic",
+
+  "feeds": [
+    {"name": "CoinDesk",          "url": "https://www.coindesk.com/arc/outboundfeeds/rss/", "tier": 1, "domain": "crypto"},
+    {"name": "The Block",         "url": "https://www.theblock.co/rss.xml",                 "tier": 1, "domain": "crypto"},
+    {"name": "Cointelegraph",     "url": "https://cointelegraph.com/rss",                   "tier": 2, "domain": "crypto"},
+    {"name": "Decrypt",           "url": "https://decrypt.co/feed",                         "tier": 2, "domain": "crypto"},
+    {"name": "Federal Reserve",   "url": "https://www.federalreserve.gov/feeds/press_all.xml", "tier": 1, "domain": "macro"},
+    {"name": "SEC",               "url": "https://www.sec.gov/news/pressreleases.rss",      "tier": 1, "domain": "regulation"},
+    {"name": "MarketWatch",       "url": "https://feeds.content.dowjones.io/public/rss/mw_topstories", "tier": 2, "domain": "stocks", "require_keywords": true},
+    {"name": "CNBC Top News",     "url": "https://www.cnbc.com/id/100003114/device/rss/rss.html", "tier": 1, "domain": "stocks", "require_keywords": true},
+    {"name": "Yahoo Finance",     "url": "https://finance.yahoo.com/news/rssindex",          "tier": 2, "domain": "stocks", "require_keywords": true},
+
+    {"name": "Google News: crypto breaking", "tier": 1, "domain": "crypto", "google_news": true,
+     "query": "(bitcoin OR ethereum OR crypto OR stablecoin OR solana OR XRP) (hack OR exploit OR ETF OR SEC OR approves OR ban OR lawsuit OR liquidations OR plunges OR surges OR record) when:2h"},
+    {"name": "Google News: Fed & macro", "tier": 1, "domain": "macro", "google_news": true,
+     "query": "(\"Federal Reserve\" OR FOMC OR Powell OR CPI OR inflation OR \"jobs report\" OR payrolls OR tariffs OR \"Treasury yields\") when:2h"},
+    {"name": "Google News: stocks breaking", "tier": 1, "domain": "stocks", "google_news": true,
+     "query": "(\"S&P 500\" OR Nasdaq OR \"Dow Jones\" OR Nvidia OR Apple OR Microsoft OR Tesla OR Amazon OR Meta OR Alphabet) (earnings OR guidance OR plunges OR surges OR halted OR antitrust OR record) when:2h"}
+  ],
+
+  "x": {
+    "enabled_if_token_present": true,
+    "accounts": ["DeItaone", "tier10k", "WatcherGuru", "FirstSquawk", "federalreserve", "SECGov", "whale_alert"],
+    "max_reads_per_day": 200,
+    "max_results_per_call": 25
+  },
+
+  "noise_patterns": [
+    "price prediction", "price analysis", "top \\d+", "\\d+ best", "how to ", "what is ", "explained",
+    "sponsored", "press release", "podcast", "newsletter", "week in review", "weekly recap",
+    "opinion", "\\bop-ed\\b", "could reach", "might hit", "here's why", "here is why",
+    "should you buy", "millionaire", "retire", "social security", "mortgage rates", "savings account",
+    "personal finance", "horoscope", "giveaway", "airdrop guide", "college fed challenge"
+  ],
+
+  "market_keywords": [
+    "bitcoin", "btc", "ether", "ethereum", "crypto", "stablecoin", "solana", "xrp", "binance", "coinbase", "tether", "usdc",
+    "etf", "sec", "cftc", "fed", "fomc", "powell", "rate cut", "rate hike", "interest rate", "inflation", "cpi", "pce",
+    "jobs report", "payroll", "unemployment", "gdp", "recession", "treasury", "yield", "tariff", "sanction",
+    "s&p", "nasdaq", "dow", "stocks", "shares", "earnings", "guidance", "revenue", "nvidia", "apple", "microsoft",
+    "tesla", "amazon", "meta", "alphabet", "google", "bank", "default", "bankrupt", "hack", "exploit", "halt",
+    "plunge", "surge", "crash", "rally", "selloff", "sell-off", "record high", "oil", "opec", "gold", "dollar"
+  ]
+}
