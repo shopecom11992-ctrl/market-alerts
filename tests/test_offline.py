@@ -99,6 +99,7 @@ m.http = fake_http
 m.claude = fake_claude
 os.environ["ANTHROPIC_API_KEY"] = "test"
 os.environ.pop("X_BEARER_TOKEN", None)
+os.environ.pop("GEMINI_API_KEY", None)
 
 
 def check(cond, label):
@@ -150,7 +151,7 @@ set_feeds([("Hack: $90 million exploit hits lending protocol", "https://www.coin
 FAIL["triage"] = True; SENT.clear()
 for _ in range(3):
     m.run(CFG, st, sender=fake_sender)
-check(len(SENT) == 1 and "ANTHROPIC_API_KEY" in SENT[0], "3 AI failures -> one warning message to WhatsApp")
+check(len(SENT) == 1 and "API_KEY" in SENT[0], "3 AI failures -> one warning message to WhatsApp")
 FAIL["triage"] = False; SENT.clear()
 m.run(CFG, st, sender=fake_sender)
 check(len(SENT) == 1 and "90 million" in SENT[0], "after AI recovers, the held-back hack news is alerted")
@@ -173,6 +174,21 @@ SENT.clear()
 CFG2 = dict(CFG, heartbeat_hour_local=0)
 m.maybe_heartbeat(CFG2, st, sender=fake_sender); m.maybe_heartbeat(CFG2, st, sender=fake_sender)
 check(len(SENT) == 1 and "خدام" in SENT[0], "daily heartbeat sent once")
+
+# --- 10. Gemini request shape + fallback to second model on quota error
+import json as _j
+calls = []
+def gem_http(url, data=None, headers=None, method=None, timeout=20):
+    calls.append((url, data, headers))
+    if "flash-lite" in url:
+        return 429, b'{"error":"quota"}'
+    return 200, _j.dumps({"candidates": [{"content": {"parts": [{"text": "thinking...", "thought": True}, {"text": '[{"i":0}]'}]}}]}).encode()
+real_http = m.http; m.http = gem_http; os.environ["GEMINI_API_KEY"] = "g"
+out = m.llm(CFG, "triage", "sys", "usr", 100)
+check(m.provider(CFG) == "gemini", "provider auto-selects Gemini when GEMINI_API_KEY is set")
+check(len(calls) == 2 and "gemini-3.5-flash" in calls[1][0] and calls[0][2]["x-goog-api-key"] == "g", "quota on flash-lite -> falls back to gemini-3.5-flash")
+check(out == '[{"i":0}]' and calls[1][1]["systemInstruction"]["parts"][0]["text"] == "sys", "Gemini JSON parsed, thinking parts ignored")
+m.http = real_http; os.environ.pop("GEMINI_API_KEY")
 
 print("\nALL TESTS PASSED\n\nSample alert as it will appear on WhatsApp:\n")
 set_feeds(); st2 = {}
