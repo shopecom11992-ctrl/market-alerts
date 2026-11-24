@@ -6,8 +6,8 @@ Runs every 10 minutes, 24/7, on GitHub Actions (free for public repos). No serve
 1. **Collects** from CoinDesk, The Block, Cointelegraph, Decrypt, the Federal Reserve, the SEC, MarketWatch, CNBC and Yahoo Finance, plus 3 Google News searches that pull in Reuters/Bloomberg/WSJ headlines. It also reads X (Twitter) accounts if you add an X token (optional, paid).
 2. **Filters noise** with rules: drops items older than 3h, already-seen links, price predictions, listicles, personal finance and opinion pieces. General-news feeds also need a market keyword.
 3. **Merges duplicates**: the same story from several outlets becomes one alert, and the extra outlets count as corroboration. If a story is a reworded version of something already alerted in the last 36h, it is suppressed.
-4. **AI triage** (Claude Haiku 5.5) scores each story 0–10 for market impact. Only stories scoring **8 or higher** become alerts, with at most 3 per run.
-5. **AI analysis** (Claude Sonnet 5.5) writes the alert in Darija: what happened, bullish/bearish/neutral, affected assets, why it matters, short-term implications and a confidence level. Each alert also carries the source, the time (Morocco) and a link.
+4. **AI triage** (Gemini 3.1 Flash-Lite free tier, or Claude Haiku 5.5) scores each story 0–10 for market impact. Only stories scoring **8 or higher** become alerts, with at most 3 per run.
+5. **AI analysis** (Gemini 3.5 Flash free tier, or Claude Sonnet 5.5) writes the alert in Darija: what happened, bullish/bearish/neutral, affected assets, why it matters, short-term implications and a confidence level. Each alert also carries the source, the time (Morocco) and a link.
 6. **WhatsApp delivery** goes through Green-API (free plan). CallMeBot, Twilio and Telegram are fallbacks. Failed sends are retried on the next run.
 7. **Self-monitoring**: a daily "system working" message at 09:00, and a WhatsApp warning if the AI fails 3 runs in a row.
 
@@ -16,10 +16,13 @@ Runs every 10 minutes, 24/7, on GitHub Actions (free for public repos). No serve
    - Best option: link a **second** WhatsApp number (for example a cheap SIM or WhatsApp Business on another number) so alerts arrive from a separate contact and your phone actually rings.
    - Linking your main number also works, but messages you send to yourself usually arrive silently, with no notification.
    - From the console, copy **apiUrl**, **idInstance** and **apiTokenInstance**.
-2. **Anthropic API key:** at console.anthropic.com → API Keys → create a key. Add about $5 of credit and set a monthly spend limit (for example $10).
+2. **AI key (pick one):**
+   - **Free:** Gemini key from aistudio.google.com → Get API key → secret `GEMINI_API_KEY`. On the free tier, Google may use the requests to improve its products.
+   - **Paid, best Darija:** Anthropic key from console.anthropic.com → secret `ANTHROPIC_API_KEY`.
+   - If both keys are set, Gemini is used. To force Claude, set `"provider": "anthropic"` in config.json.
 3. **GitHub:** sign in. Create a **public** repo named `market-alerts`, then upload all the files from this zip, including the `.github` folder.
 4. **Secrets:** in the repo, go to Settings → Secrets and variables → Actions → New repository secret:
-   - `ANTHROPIC_API_KEY`
+   - `GEMINI_API_KEY` (or `ANTHROPIC_API_KEY`)
    - `GREENAPI_URL`
    - `GREENAPI_INSTANCE`
    - `GREENAPI_TOKEN`
@@ -38,7 +41,8 @@ Runs every 10 minutes, 24/7, on GitHub Actions (free for public repos). No serve
 |---|---|
 | GitHub Actions (public repo) | $0 |
 | Green-API WhatsApp | $0 (Developer plan, 3 chats) · $12/mo Business if ever needed |
-| Claude API (Haiku triage + Sonnet analysis) | ≈ $3–6 / month (estimate) |
+| Gemini API (free tier) | $0 (if usage stays within the free limits; if a model hits its limit, it switches to the other model) |
+| Claude API instead (optional) | ≈ $3–6 / month (estimate) |
 | X API (optional) | ≈ $1/day at 200 reads/day cap → ≈ $30/month |
 
 ## Local test

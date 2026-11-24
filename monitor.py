@@ -6,7 +6,8 @@ Pure Python standard library (no pip install needed). One run = one scan; schedu
 (GitHub Actions every 10 min). State (dedupe memory) lives in state/state.json.
 
 Secrets come from environment variables only:
-  ANTHROPIC_API_KEY            required for AI triage/analysis
+  GEMINI_API_KEY               AI via Google Gemini (free tier)  -- one of these two is required
+  ANTHROPIC_API_KEY            AI via Claude (paid, best Darija)
   GREENAPI_URL, GREENAPI_INSTANCE, GREENAPI_TOKEN, GREENAPI_CHAT_ID   WhatsApp via Green-API (free plan)
   CALLMEBOT_PHONE, CALLMEBOT_APIKEY       WhatsApp via CallMeBot (free, personal; signups often full)
   or TWILIO_SID, TWILIO_TOKEN, TWILIO_FROM, TWILIO_TO   WhatsApp via Twilio (paid)
@@ -376,6 +377,54 @@ def claude(model, system, user, max_tokens=2000):
         raise LLMError(f"HTTP {st}: {resp[:300]!r}")
 
 
+def gemini(model, system, user, max_tokens=2000):
+    key = os.environ.get("GEMINI_API_KEY")
+    if not key:
+        raise LLMError("GEMINI_API_KEY missing")
+    body = {
+        "systemInstruction": {"parts": [{"text": system}]},
+        "contents": [{"role": "user", "parts": [{"text": user}]}],
+        # generous budget: newer Gemini models may spend output tokens on internal thinking
+        "generationConfig": {"maxOutputTokens": max(4096, max_tokens * 3), "temperature": 0.2,
+                             "responseMimeType": "application/json"},
+    }
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    for attempt in range(3):
+        st, resp = http(url, data=body, timeout=90, headers={"x-goog-api-key": key})
+        if st == 200:
+            j = json.loads(resp)
+            parts = (j.get("candidates") or [{}])[0].get("content", {}).get("parts", [])
+            text = "".join(p.get("text", "") for p in parts if not p.get("thought"))
+            if text.strip():
+                return text
+            raise LLMError("empty Gemini response: " + str(j)[:300])
+        if st in (500, 502, 503) and attempt < 2:
+            time.sleep(4 * (attempt + 1))
+            continue
+        raise LLMError(f"Gemini HTTP {st}: {resp[:300]!r}")
+
+
+def provider(cfg):
+    p = cfg.get("provider", "auto")
+    if p == "auto":
+        return "gemini" if os.environ.get("GEMINI_API_KEY") else "anthropic"
+    return p
+
+
+def llm(cfg, role, system, user, max_tokens):
+    """role = 'triage' | 'analysis'. Gemini: falls back to the other free model if one hits its quota."""
+    if provider(cfg) == "gemini":
+        first = cfg["gemini_triage_model"] if role == "triage" else cfg["gemini_analysis_model"]
+        second = cfg["gemini_analysis_model"] if role == "triage" else cfg["gemini_triage_model"]
+        try:
+            return gemini(first, system, user, max_tokens)
+        except LLMError as e:
+            log(f"{first} failed ({str(e)[:80]}), trying {second}")
+            return gemini(second, system, user, max_tokens)
+    model = cfg["triage_model"] if role == "triage" else cfg["analysis_model"]
+    return claude(model, system, user, max_tokens)
+
+
 def extract_json(text):
     text = text.strip()
     text = re.sub(r"^```(?:json)?|```$", "", text, flags=re.M).strip()
@@ -425,7 +474,7 @@ def triage(cands, state, cfg):
         lines.append(f"[{i}] ({c['source']}, {c['published'][:16]}Z){extra} {c['title']} | {c['summary'][:220]}")
     user = "RECENT ALERTS ALREADY SENT:\n" + ("\n".join(f"- {t}" for t in recent) or "(none)") + \
            "\n\nNEW HEADLINES:\n" + "\n".join(lines)
-    res = extract_json(claude(cfg["triage_model"], TRIAGE_SYSTEM, user, max_tokens=150 + 70 * len(cands)))
+    res = extract_json(llm(cfg, "triage", TRIAGE_SYSTEM, user, max_tokens=150 + 70 * len(cands)))
     return {int(r["i"]): r for r in res if isinstance(r, dict) and "i" in r}
 
 
@@ -435,7 +484,7 @@ def analyse(c, tri, cfg):
     user = (f"Source: {c['source']}\nPublished (UTC): {c['published']}\nHeadline: {c['title']}\n"
             f"Summary: {c['summary'] or '(none)'}\nAlso reported by: {corrob}\n"
             f"Editor category: {tri.get('category')} | impact {tri.get('impact')}/10 | {tri.get('reason')}")
-    return extract_json(claude(cfg["analysis_model"], ANALYSIS_SYSTEM.format(script=script), user, max_tokens=900))
+    return extract_json(llm(cfg, "analysis", ANALYSIS_SYSTEM.format(script=script), user, max_tokens=900))
 
 
 # ----------------------------------------------------------------------------- formatting
@@ -584,7 +633,7 @@ def run(cfg, state, dry=False, sender=send_whatsapp):
             state["seen"].pop(c["key"], None)
         if h["llm_fail_streak"] >= 3 and not h["error_notified"] and not dry:
             if sender(f"⚠️ Market Alerts: الذكاء الاصطناعي ما خدامش ({h['llm_fail_streak']} مرات). "
-                      f"شوف ANTHROPIC_API_KEY / الرصيد. Error: {str(e)[:150]}")[0]:
+                      f"شوف GEMINI_API_KEY / ANTHROPIC_API_KEY. Error: {str(e)[:150]}")[0]:
                 h["error_notified"] = True
         return []
 
