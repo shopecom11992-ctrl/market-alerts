@@ -1,0 +1,64 @@
+name: market-alerts
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"   # every 10 minutes, 24/7 (GitHub may delay a few minutes at busy times)
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "run | dry-run | test-send"
+        default: "test-send"
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: market-alerts
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run monitor
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GREENAPI_URL: ${{ secrets.GREENAPI_URL }}
+          GREENAPI_INSTANCE: ${{ secrets.GREENAPI_INSTANCE }}
+          GREENAPI_TOKEN: ${{ secrets.GREENAPI_TOKEN }}
+          GREENAPI_CHAT_ID: ${{ secrets.GREENAPI_CHAT_ID }}
+          CALLMEBOT_PHONE: ${{ secrets.CALLMEBOT_PHONE }}
+          CALLMEBOT_APIKEY: ${{ secrets.CALLMEBOT_APIKEY }}
+          TWILIO_SID: ${{ secrets.TWILIO_SID }}
+          TWILIO_TOKEN: ${{ secrets.TWILIO_TOKEN }}
+          TWILIO_FROM: ${{ secrets.TWILIO_FROM }}
+          TWILIO_TO: ${{ secrets.TWILIO_TO }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
+          CONTACT_EMAIL: ${{ secrets.CONTACT_EMAIL }}
+        run: |
+          MODE="${{ github.event.inputs.mode || 'run' }}"
+          case "$MODE" in
+            test-send) python monitor.py --test-send ;;
+            dry-run)   python monitor.py --dry-run ;;
+            *)         python monitor.py ;;
+          esac
+
+      - name: Save dedupe state
+        if: always()
+        run: |
+          git config user.name  "market-alerts-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add state/state.json
+          git diff --cached --quiet && exit 0
+          git commit -m "state update [skip ci]" -q
+          for i in 1 2 3; do git pull --rebase -q -X ours && git push -q && break; sleep 3; done
