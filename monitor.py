@@ -398,8 +398,8 @@ def gemini(model, system, user, max_tokens=2000):
             if text.strip():
                 return text
             raise LLMError("empty Gemini response: " + str(j)[:300])
-        if st in (500, 502, 503) and attempt < 2:
-            time.sleep(4 * (attempt + 1))
+        if st in (500, 502, 503, 504) and attempt < 2:
+            time.sleep(6 * (attempt + 1))
             continue
         raise LLMError(f"Gemini HTTP {st}: {resp[:300]!r}")
 
@@ -416,11 +416,15 @@ def llm(cfg, role, system, user, max_tokens):
     if provider(cfg) == "gemini":
         first = cfg["gemini_triage_model"] if role == "triage" else cfg["gemini_analysis_model"]
         second = cfg["gemini_analysis_model"] if role == "triage" else cfg["gemini_triage_model"]
-        try:
-            return gemini(first, system, user, max_tokens)
-        except LLMError as e:
-            log(f"{first} failed ({str(e)[:80]}), trying {second}")
-            return gemini(second, system, user, max_tokens)
+        chain = list(dict.fromkeys([first, second] + cfg.get("gemini_fallback_models", [])))
+        last = None
+        for model in chain:
+            try:
+                return gemini(model, system, user, max_tokens)
+            except LLMError as e:
+                last = e
+                log(f"{model} failed ({str(e)[:90]}), trying next model")
+        raise last
     model = cfg["triage_model"] if role == "triage" else cfg["analysis_model"]
     return claude(model, system, user, max_tokens)
 
@@ -612,6 +616,9 @@ def run(cfg, state, dry=False, sender=send_whatsapp):
     state["stats"]["scanned"] += len(items)
     fresh = prefilter(items, cfg, state)
     cands = [c for c in cluster(fresh) if not recently_alerted(c["title"], state, cfg)]
+    cap = cfg.get("max_candidates_per_run", 60)
+    if len(cands) > cap:  # e.g. first run backlog: keep the newest, skip the old tail
+        cands = sorted(cands, key=lambda c: (c["published"], -c["tier"]), reverse=True)[:cap]
     state["stats"]["candidates"] += len(cands)
     log(f"fetched {len(items)}, fresh {len(fresh)}, candidates {len(cands)}")
     if not cands:

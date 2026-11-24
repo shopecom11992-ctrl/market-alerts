@@ -9,6 +9,8 @@
   "provider": "auto",
   "gemini_triage_model": "gemini-3.1-flash-lite",
   "gemini_analysis_model": "gemini-3.5-flash",
+  "gemini_fallback_models": ["gemini-2.5-flash", "gemini-2.5-flash-lite"],
+  "max_candidates_per_run": 60,
   "triage_model": "claude-haiku-5-5",
   "analysis_model": "claude-sonnet-5-5",
   "darija_script": "arabic",
@@ -22,7 +24,6 @@
     {"name": "SEC",               "url": "https://www.sec.gov/news/pressreleases.rss",      "tier": 1, "domain": "regulation"},
     {"name": "MarketWatch",       "url": "https://feeds.content.dowjones.io/public/rss/mw_topstories", "tier": 2, "domain": "stocks", "require_keywords": true},
     {"name": "CNBC Top News",     "url": "https://www.cnbc.com/id/100003114/device/rss/rss.html", "tier": 1, "domain": "stocks", "require_keywords": true},
-    {"name": "Yahoo Finance",     "url": "https://finance.yahoo.com/news/rssindex",          "tier": 2, "domain": "stocks", "require_keywords": true},
 
     {"name": "Google News: crypto breaking", "tier": 1, "domain": "crypto", "google_news": true,
      "query": "(bitcoin OR ethereum OR crypto OR stablecoin OR solana OR XRP) (hack OR exploit OR ETF OR SEC OR approves OR ban OR lawsuit OR liquidations OR plunges OR surges OR record) when:2h"},
