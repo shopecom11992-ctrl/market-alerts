@@ -650,6 +650,9 @@ def run(cfg, state, dry=False, sender=send_whatsapp):
         if t and not t.get("duplicate") and float(t.get("impact", 0)) >= cfg["impact_threshold"]:
             picks.append((float(t["impact"]), -c["tier"], i, c, t))
     picks.sort(reverse=True)
+    top = sorted(((float(t.get("impact", 0)), cands[i]["title"]) for i, t in tri.items() if i < len(cands)), reverse=True)[:3]
+    for sc, title in top:  # visible in the Actions log, useful for tuning impact_threshold
+        log(f"top score {sc:g}/10: {title[:110]}")
     picks = picks[: cfg["max_alerts_per_run"]]
 
     sent = []
