@@ -695,6 +695,20 @@ async function freeUpUsdt(okx, needUsdt, { exclude = [] } = {}, fetchImpl = fetc
 }
 async function sellForUsdt(okx, plan) { return okx.marketSell(plan.instId, plan.sz); }
 
+// The user named the coin to sell ("sell BTC and buy SOL"): plan selling all of it, or just enough for `usdt`.
+async function salePlanFor(okx, ccy, usdt = null) {
+  const bal = await okx.balances();
+  const avail = (bal.ccy[ccy] && bal.ccy[ccy].avail) || 0;
+  if (!(avail > 0)) throw new OkxError("nothing_to_sell", "nothing_to_sell", { ccy });
+  const instId = `${ccy}-USDT`;
+  const inst = await okx.instrument(instId);
+  const last = await okx.ticker(instId);
+  const want = usdt ? Math.min(avail, (usdt * 1.03) / last) : avail;
+  const sz = floorTo(want, inst.lotSz);
+  if (parseFloat(sz) < inst.minSz) throw new OkxError("nothing_to_sell", "nothing_to_sell", { ccy });
+  return { sold: ccy, sz: parseFloat(sz), estUsdt: +(parseFloat(sz) * last).toFixed(2), instId, all: !usdt };
+}
+
 // ===== App
 
 const API = "https://market-qa-bot.shopecom11992.workers.dev/api";
@@ -1062,13 +1076,20 @@ function Chat({ t, rtl, lang, seed, okxProps }) {
     let bal;
     try { bal = await okx.balances(); } catch (e) { return okxFail(e); }
     const free = (bal.ccy.USDT && bal.ccy.USDT.avail) || 0;
-    let usdt = Math.floor(free * (okxCfg.pct || 10)) / 100;
-    let sale = null;
-    if (usdt < 5) { // not enough USDT: plan selling the weakest coin
-      usdt = Math.max(5, Math.floor(bal.totalUsd * (okxCfg.pct || 10)) / 100);
-      try { sale = await freeUpUsdt(okx, usdt, { exclude: [base] }); } catch (e) { return okxFail(e); }
-      if (sale.sold === null) sale = null;
-    }
+    const keep = (ti.keep || []).map((x) => String(x).toUpperCase());
+    let usdt = ti.amountUsdt ? Math.floor(ti.amountUsdt * 100) / 100 : Math.floor(free * (okxCfg.pct || 10)) / 100;
+    let sale = null, spendAllAfterSale = false;
+    try {
+      if (ti.fundFrom && !(ti.amountUsdt && !ti.fundAll && free >= usdt)) { // the user said which coin to sell: obey exactly
+        if (keep.includes(ti.fundFrom)) return say(t.okxErr("nothing_to_sell"));
+        sale = await salePlanFor(okx, ti.fundFrom, ti.fundAll || !ti.amountUsdt ? null : Math.max(0, usdt - free));
+        spendAllAfterSale = ti.fundAll || !ti.amountUsdt;
+      } else if (usdt < 5 || usdt > free) { // not enough USDT: sell the weakest coin, never the ones the user wants to keep
+        if (usdt < 5) usdt = Math.max(5, Math.floor(bal.totalUsd * (okxCfg.pct || 10)) / 100);
+        sale = await freeUpUsdt(okx, usdt, { exclude: [base, ...keep] });
+        if (sale.sold === null) sale = null;
+      }
+    } catch (e) { return okxFail(e); }
     const finish = (log) => {
       if (log.fill) setOkxTrades((prev) => [{ ...log, symbol: a.symbol, open: true, source: "chat" }, ...prev]);
       if (log.error === "oco_failed" || log.error === "oco_too_small") say(t.ocoFailed);
@@ -1077,7 +1098,10 @@ function Chat({ t, rtl, lang, seed, okxProps }) {
     };
     const doIt = async () => {
       try {
-        if (sale) { await sellForUsdt(okx, sale); await new Promise((r) => setTimeout(r, 1200)); addEvent(t.freeUp(sale.sold, sale.sz, sale.estUsdt, base)); }
+        if (sale) {
+          await sellForUsdt(okx, sale); await new Promise((r) => setTimeout(r, 1500)); addEvent(t.freeUp(sale.sold, sale.sz, sale.estUsdt, base));
+          if (spendAllAfterSale) { const b2 = await okx.balances(); usdt = Math.floor(((b2.ccy.USDT && b2.ccy.USDT.avail) || 0) * 0.995 * 100) / 100; }
+        }
         if (plan.action === "limit") {
           const p2 = await placeEntry(okx, { base, usdt, entry: plan.entry, takeProfit: plan.takeProfit, stopLoss: plan.stopLoss, expiryHours: plan.expiryHours });
           setOkxPending((prev) => [{ ...p2, symbol: a.symbol }, ...prev]);
@@ -1089,13 +1113,14 @@ function Chat({ t, rtl, lang, seed, okxProps }) {
         else okxFail(e);
       }
     };
-    let text = plan.action === "limit" ? "" : t.chatPlanBuy(base, fmtMoney(usdt), plan);
-    if (mode === "now" && plan.action === "buy" && (plan.defaultLevels || (plan.confidence === "low"))) text = t.nowBadNote + "\n" + (plan.summary || "") + "\n\n" + text;
+    const shownUsdt = spendAllAfterSale ? Math.floor((free + sale.estUsdt) * 0.995 * 100) / 100 : usdt;
+    let text = plan.action === "limit" ? "" : t.chatPlanBuy(base, fmtMoney(shownUsdt), plan);
+    if (mode === "now" && plan.action === "buy" && (plan.defaultLevels || plan.confidence === "low")) text = t.nowBadNote + "\n\n" + text; // summary is already inside chatPlanBuy
     if (sale) text = t.freeUp(sale.sold, sale.sz, sale.estUsdt, base) + (text ? "\n\n" + text : "");
     if (text) text += "\n\n" + t.planDisclaimer;
     if (!live) { if (text) say(text); return doIt(); }
     const id = "act" + Date.now(); actions.current[id] = doIt;
-    say((text || t.pendingPlaced(base, { ...plan, usdt })) + "\n\n" + t.chatConfirmLive, { action: { id, label: t.confirmBtn } });
+    say((text || t.pendingPlaced(base, { ...plan, usdt: shownUsdt })) + "\n\n" + t.chatConfirmLive, { action: { id, label: t.confirmBtn } });
   };
 
   const runAction = async (m) => {
@@ -1109,11 +1134,13 @@ function Chat({ t, rtl, lang, seed, okxProps }) {
     const q = (text || "").trim();
     if (!q || busy) return;
     setInput(""); setBusy(true);
-    setMsgs((m) => [...m, { id: "u" + Date.now(), me: true, text: q }, { id: "p" + Date.now(), me: false, pending: true, text: t.thinking }]);
+    actions.current = {}; // a new message cancels older confirm buttons (e.g. a plan the user just corrected)
+    setMsgs((m) => [...m.map((x) => (x.action ? { ...x, action: null } : x)), { id: "u" + Date.now(), me: true, text: q }, { id: "p" + Date.now(), me: false, pending: true, text: t.thinking }]);
     // Everything goes through Kim (the conversational agent): it understands Darija and decides the action.
     const usdtFree = okxBal && okxBal.ccy.USDT ? okxBal.ccy.USDT.avail : null;
     const ctx = { connected: !!okx, demo: okx ? okx.demo : null, balanceUsd: okxBal ? +okxBal.totalUsd.toFixed(2) : null, usdtFree: usdtFree != null ? +usdtFree.toFixed(2) : null,
       openTrades: okxTrades.filter((x) => x.open && okx && x.demo === okx.demo).map((x) => ({ coin: x.instId, qty: x.qty, entry: x.fill && x.fill.avgPx, sl: x.sl, tp: x.tp, byMission: !!x.mission })),
+      holdings: okxBal ? Object.entries(okxBal.ccy).filter(([, v]) => v.usd >= 1).map(([c, v]) => ({ coin: c, usd: +v.usd.toFixed(2) })) : null,
       waitingOrders: (okxPending || []).filter((p) => okx && p.demo === okx.demo).map((p) => ({ coin: p.instId, buyAt: p.entry, now: p.lastPx, usdt: p.usdt })),
       mission: mission && mission.active ? { capital: mission.capital, targetPct: mission.targetPct, days: mission.days, pnlPct: +(mission.pnl || 0).toFixed(2), daysLeft: Math.max(0, Math.ceil((mission.endsAt - Date.now()) / 86400000)) } : null };
     const history = msgs.filter((x) => !x.pending && x.id !== "hello").slice(-8).map((x) => ({ me: x.me, text: String(x.text).slice(0, 300) }));
@@ -1129,7 +1156,7 @@ function Chat({ t, rtl, lang, seed, okxProps }) {
     try {
       if (a.type === "open" || a.type === "close") {
         if (reply) say(reply);
-        await tradeCommand({ intent: a.type, asset: res.asset, when: a.when });
+        await tradeCommand({ intent: a.type, asset: res.asset, when: a.when, fundFrom: a.fundFrom, fundAll: a.fundAll, amountUsdt: a.amountUsdt, keep: a.keep || [] });
       } else if (a.type === "cancel_orders") {
         if (reply) say(reply);
         const n = await cancelPending(a.symbol ? (p) => p.instId.startsWith(a.symbol + "-") : () => true);

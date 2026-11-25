@@ -349,3 +349,17 @@ export async function freeUpUsdt(okx, needUsdt, { exclude = [] } = {}, fetchImpl
   return { sold: pick.ccy, sz: parseFloat(sz), estUsdt: +(parseFloat(sz) * last).toFixed(2), score: pick.score, instId, missing: +missing.toFixed(2) };
 }
 export async function sellForUsdt(okx, plan) { return okx.marketSell(plan.instId, plan.sz); }
+
+// The user named the coin to sell ("sell BTC and buy SOL"): plan selling all of it, or just enough for `usdt`.
+export async function salePlanFor(okx, ccy, usdt = null) {
+  const bal = await okx.balances();
+  const avail = (bal.ccy[ccy] && bal.ccy[ccy].avail) || 0;
+  if (!(avail > 0)) throw new OkxError("nothing_to_sell", "nothing_to_sell", { ccy });
+  const instId = `${ccy}-USDT`;
+  const inst = await okx.instrument(instId);
+  const last = await okx.ticker(instId);
+  const want = usdt ? Math.min(avail, (usdt * 1.03) / last) : avail;
+  const sz = floorTo(want, inst.lotSz);
+  if (parseFloat(sz) < inst.minSz) throw new OkxError("nothing_to_sell", "nothing_to_sell", { ccy });
+  return { sold: ccy, sz: parseFloat(sz), estUsdt: +(parseFloat(sz) * last).toFixed(2), instId, all: !usdt };
+}

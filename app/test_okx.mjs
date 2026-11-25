@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { sha256, hmacSha256, utf8, base64, sign, floorTo, roundTo, createOkx, executePlan, closeTrade, replaceStop, isGone, scanMarket, scoreCandles, placeEntry, checkPending, freeUpUsdt } from "./okx.js";
+import { sha256, hmacSha256, utf8, base64, sign, floorTo, roundTo, createOkx, executePlan, closeTrade, replaceStop, isGone, scanMarket, scoreCandles, placeEntry, checkPending, freeUpUsdt, salePlanFor } from "./okx.js";
 let fails = 0; const ok = (c, m) => { console.log((c ? "PASS " : "FAIL ") + m); if (!c) fails++; };
 for (const s of ["", "abc", "a".repeat(55), "a".repeat(56), "a".repeat(64), "a".repeat(1000), "مرحبا 🚀 é"]) {
   ok(Buffer.from(sha256(utf8(s))).toString("hex") === crypto.createHash("sha256").update(s).digest("hex"), "sha256 len " + s.length);
@@ -83,4 +83,7 @@ const fu = await freeUpUsdt(okx, 1200, { exclude: [] }, async () => ({ json: asy
 ok(fu.sold === "SOL" && fu.missing > 0 && fu.sz > 0 && fu.sz <= state.sol + 1e-9, "freeUpUsdt: plans selling the weakest holding to cover missing USDT");
 const fu2 = await freeUpUsdt(okx, 10, {}, async () => ({ json: async () => ({ data: [] }) }));
 ok(fu2.sold === null, "freeUpUsdt: nothing to sell when USDT is enough");
+const sp = await salePlanFor(okx, "SOL"); ok(sp.sold === "SOL" && sp.all && Math.abs(sp.sz - state.sol) < 1e-5, "salePlanFor: sells ALL of the coin the user named");
+const sp2 = await salePlanFor(okx, "SOL", 50); ok(Math.abs(sp2.sz - 0.515) < 1e-6 && !sp2.all, "salePlanFor: sells just enough for an amount");
+e = null; try { await salePlanFor(okx, "LINK"); } catch (x) { e = x; } ok(e && e.code === "nothing_to_sell", "salePlanFor: coin not held -> error");
 console.log(fails ? fails + " FAILED" : "ALL OKX TESTS PASSED");
