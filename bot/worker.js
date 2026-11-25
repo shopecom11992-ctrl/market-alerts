@@ -16,8 +16,33 @@
 
 // Fastest first. Cloudflare free plan cancels background work ~30 s after the webhook returns,
 // so every step has a hard timeout and the whole answer must finish in ~25 s.
-const MODELS = ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-3.1-flash-lite"];
-const NO_THINK = { "gemini-2.5-flash-lite": true, "gemini-2.5-flash": true };
+// Google retires model names over time (2.5 is already closed to new accounts), so we ask the API
+// which Flash / Flash-Lite models this key can use and try them fastest-first.
+const FALLBACK_MODELS = ["gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.6-flash"];
+let MODEL_CACHE = null, MODEL_CACHE_AT = 0;
+const NO_THINK = {}; // thinking is only disabled where the model is known to accept thinkingBudget:0
+
+export function rankModels(names) {
+  const ok = names.map(n => n.replace(/^models\//, ""))
+    .filter(n => /^gemini-\d+(\.\d+)?-flash(-lite)?(-latest)?$/.test(n) && parseFloat(n.slice(7)) >= 3);
+  const ver = n => parseFloat(n.match(/^gemini-(\d+(?:\.\d+)?)/)[1]);
+  // lite first (fastest), newest version first within each group
+  return ok.sort((a, b) => (/-lite/.test(b) - /-lite/.test(a)) || ver(b) - ver(a));
+}
+
+async function models(env) {
+  if (MODEL_CACHE && Date.now() - MODEL_CACHE_AT < 6 * 3600e3) return MODEL_CACHE;
+  try {
+    const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=200",
+      { headers: { "x-goog-api-key": env.GEMINI_API_KEY }, signal: AbortSignal.timeout(3000) });
+    if (r.ok) {
+      const list = ((await r.json()).models || []).filter(m => (m.supportedGenerationMethods || []).includes("generateContent")).map(m => m.name);
+      const ranked = rankModels(list);
+      if (ranked.length) { MODEL_CACHE = ranked.slice(0, 4); MODEL_CACHE_AT = Date.now(); console.log("models:", MODEL_CACHE.join(", ")); return MODEL_CACHE; }
+    }
+  } catch (e) { console.log("model list error", e && e.message); }
+  return FALLBACK_MODELS;
+}
 const BUDGET_MS = 25000;
 const UA = { "User-Agent": "Mozilla/5.0 (MarketQABot)" };
 
@@ -74,23 +99,24 @@ async function handle(msg, env) {
 // Collect everything we can about one asset, from several sources in parallel.
 async function gather(a) {
   const isCrypto = a.type === "CRYPTOCURRENCY" || /-USD$/.test(a.symbol) || !!a.cgId;
-  const [px, gnews, ynews, coin] = await Promise.all([
+  const [px, gnews, ynews, coin, rss] = await Promise.all([
     priceData(a.symbol, !isCrypto),           // crypto falls back to CoinGecko instead of Stooq
     headlines(a.symbol, a.name),
     yahooNews(a.name || a.symbol),
     isCrypto ? coinInfo(a) : Promise.resolve(null),
+    outletNews(a, isCrypto),
   ]);
   let price = px;
   if (price.error && isCrypto && coin && coin.cgId) price = await coinPrice(coin.cgId, a.symbol); // tiny coins not on Yahoo
   const seen = new Set();
-  const news = [...ynews, ...gnews].filter(n => { const k = n.title.toLowerCase().slice(0, 60); if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 8);
+  const news = [...ynews, ...rss, ...gnews].filter(n => { const k = n.title.toLowerCase().slice(0, 60); if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 8);
   return { symbol: a.symbol, name: a.name, type: a.type || (isCrypto ? "CRYPTOCURRENCY" : "EQUITY"), price, coin, news };
 }
 
 // ---------------------------------------------------------------- Gemini
 async function gemini(env, system, user, json = true, maxTokens = 2048, deadline = Date.now() + 20000) {
   let last;
-  for (const model of MODELS) {
+  for (const model of await models(env)) {
     const left = deadline - Date.now();
     if (left < 2500) break;
     const gc = { maxOutputTokens: maxTokens, temperature: 0.3 };
@@ -102,7 +128,7 @@ async function gemini(env, system, user, json = true, maxTokens = 2048, deadline
         headers: { "Content-Type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
         body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] },
                                contents: [{ role: "user", parts: [{ text: user }] }], generationConfig: gc }),
-        signal: AbortSignal.timeout(Math.min(12000, left - 500)),
+        signal: AbortSignal.timeout(Math.min(json ? 6000 : 12000, left - 500)),
       });
       if (r.ok) {
         const j = await r.json();
@@ -112,6 +138,7 @@ async function gemini(env, system, user, json = true, maxTokens = 2048, deadline
         last = model + " empty";
       } else {
         last = `${model} HTTP ${r.status} ${(await r.text()).slice(0, 120)}`;
+        if (r.status === 404 && MODEL_CACHE) MODEL_CACHE = MODEL_CACHE.filter(m => m !== model);
       }
     } catch (e) { last = `${model} ${e.name || e}`; }
     console.log("gemini fallback:", last);
@@ -122,7 +149,7 @@ async function gemini(env, system, user, json = true, maxTokens = 2048, deadline
 // Gemini + live Google Search (free tier: 2.5 Flash / Flash-Lite). Returns {text, sources}.
 async function geminiSearch(env, system, user, deadline) {
   let last;
-  for (const model of ["gemini-2.5-flash", "gemini-2.5-flash-lite"]) {
+  for (const model of (env.SEARCH_MODELS || "gemini-3.5-flash").split(",")) {
     const left = deadline - Date.now();
     if (left < 4000) break;
     try {
@@ -202,14 +229,20 @@ async function understand(text, env, deadline) {
     if (assets.length) return { type: "asset", assets };
   }
   let j;
-  try { j = extractJSON(await gemini(env, INTENT_SYSTEM, text, true, 250, Math.min(deadline - 15000, Date.now() + 6000))); }
-  catch (e) { console.log("intent error", e && e.message); j = { type: "asset", queries: [text.replace(/[^\p{L}\p{N}$ .&-]/gu, " ").trim()] }; }
+  try { j = extractJSON(await gemini(env, INTENT_SYSTEM, text, true, 250, Math.min(deadline - 15000, Date.now() + 7000))); }
+  catch (e) { console.log("intent error", e && e.message); j = { type: "asset", queries: candidateWords(text) }; }
   if (j.type !== "asset") return j;
   const found = await Promise.all((j.queries || []).slice(0, 2).map(q => resolveAsset(q)));
   const uniq = [];
   for (const f of found) if (f && !uniq.some(u => u.symbol === f.symbol)) uniq.push(f);
   return uniq.length ? { type: "asset", assets: uniq }
                      : { type: "chat", reply: "ما لقيتش هاد السهم ولا العملة 🤔 جرب تكتب السمية بالإنجليزية ولا الـticker (مثلا: Solana ولا SOL)." };
+}
+
+const STOP = new Set(("salam slm labas bikhir mrhba marhba hello hi hey merci chokran choukran 3afak afak kat9ol katgol kat9oul katqol t9ol tgol 9ol gol chno chnou achno wach was mzyan mezyan mzyana nchri nbi3 nbe3 daba db dyal dial dyali f fi fl w wa l lia lik 3la ala ach kifach kifash bghit bgit n3rf chi chy had hadi hada howa hiya ana nta nti khasni wla ola walla ghadi ghaytl3 ytla3 yhbt tal3 hab6 akhbar khbar jdid " +
+  "the what is are about how buy sell now should i price stock stocks crypto coin token analyse analyze analysis stp svp please news today tell me give info on of and or for to a an").split(" "));
+export function candidateWords(text) {
+  return [...new Set((text.toLowerCase().match(/[a-z][a-z0-9.&-]{2,}/g) || []).filter(w => !STOP.has(w)))].slice(0, 3);
 }
 
 // Find any stock / ETF / index / crypto by name or ticker. Yahoo Finance search first, CoinGecko for the long tail of coins.
@@ -251,7 +284,7 @@ Format (WhatsApp, <= 1300 characters, short lines, emojis as section markers):
 💵 الثمن دابا + التغير (1 نهار / 1 سيمانة / 1 شهر)
 📈 الاتجاه: (فوق/تحت SMA20 و SMA50، شنو كيعني)
 🧱 المستويات: support و resistance من الداتا
-📰 الأخبار والأحداث الجاية: 2-4 نقط (من الداتا والبحث) وتأثيرها المحتمل
+📰 الأخبار: 2-4 نقط من العناوين (اذكر المصدر بين قوسين) وتأثيرها المحتمل
 🪙 للكريبتو فقط: الترتيب، الـmarket cap، وبعدو على الـATH
 ⚠️ المخاطر: 2 نقط
 🔀 السيناريوهات: "إلا طلع فوق X ... / إلا هبط تحت Y ..."
@@ -263,6 +296,7 @@ async function analyse(question, data, env, deadline = Date.now() + 20000) {
   try {
     let t, sources = [];
     try {
+      if (env.GOOGLE_SEARCH !== "1") throw new Error("google search grounding disabled");
       const g = await geminiSearch(env, ANALYSIS_SYSTEM, user, deadline - 1500);
       t = g.text; sources = g.sources;
     } catch (e) {
@@ -270,6 +304,7 @@ async function analyse(question, data, env, deadline = Date.now() + 20000) {
       t = await gemini(env, ANALYSIS_SYSTEM, user, false, 900, deadline - 1500);
     }
     t = t.trim();
+    if (!sources.length) sources = [...new Set(data.flatMap(d => [d.price && !d.price.error ? d.price.src : null, d.coin ? "CoinGecko" : null, ...(d.news || []).map(n => n.source)]))].filter(Boolean).slice(0, 6);
     if (sources.length) t += "\n\n🔗 المصادر: " + sources.join(" · ");
     if (!t.includes("القرار ديالك")) t += "\n\nℹ️ هادا تحليل ماشي نصيحة شراء ولا بيع — القرار ديالك.";
     return t.slice(0, 3500);
@@ -322,7 +357,7 @@ async function priceData(symbol, allowStooq = true) {
       if (res) {
         const q = res.indicators.quote[0];
         const asOf = res.meta.regularMarketTime ? new Date(res.meta.regularMarketTime * 1000).toISOString() : null;
-        return summarize(symbol, q.close, q.high, q.low, { price: res.meta.regularMarketPrice, currency: res.meta.currency, asOf });
+        return Object.assign(summarize(symbol, q.close, q.high, q.low, { price: res.meta.regularMarketPrice, currency: res.meta.currency, asOf }), { src: "Yahoo Finance" });
       }
     }
   } catch (e) { console.log("yahoo error", e); }
@@ -330,7 +365,7 @@ async function priceData(symbol, allowStooq = true) {
     const s = symbol.endsWith("-USD") ? symbol.replace("-USD", "usd").toLowerCase() : symbol.toLowerCase() + ".us";
     const r = await fetch(`https://stooq.com/q/d/l/?s=${s}&i=d`, { headers: UA, signal: AbortSignal.timeout(4000) });
     const rows = (await r.text()).trim().split("\n").slice(1).map(l => l.split(",")).filter(x => x.length >= 5).slice(-130);
-    if (rows.length) return summarize(symbol, rows.map(x => +x[4]), rows.map(x => +x[2]), rows.map(x => +x[3]), { asOf: rows[rows.length - 1][0] });
+    if (rows.length) return Object.assign(summarize(symbol, rows.map(x => +x[4]), rows.map(x => +x[2]), rows.map(x => +x[3]), { asOf: rows[rows.length - 1][0] }), { src: "Stooq" });
   } catch (e) { console.log("stooq error", e); }
   return { symbol, error: "price data unavailable" };
 }
@@ -342,8 +377,31 @@ async function headlines(symbol, name) {
     if (!r.ok) return [];
     const x = await r.text();
     return [...x.matchAll(/<item>[\s\S]*?<title>([\s\S]*?)<\/title>[\s\S]*?<pubDate>([\s\S]*?)<\/pubDate>/g)]
-      .slice(0, 6).map(m => ({ title: m[1].replace(/<!\[CDATA\[|\]\]>/g, "").replace(/&amp;/g, "&").replace(/&#39;/g, "'").replace(/&quot;/g, '"'), date: m[2] }));
+      .slice(0, 6).map(m => { const t = m[1].replace(/<!\[CDATA\[|\]\]>/g, "").replace(/&amp;/g, "&").replace(/&#39;/g, "'").replace(/&quot;/g, '"'); const pub = (t.match(/ - ([^-]+)$/) || [])[1]; return { title: t.replace(/ - [^-]+$/, ""), source: pub || "Google News", date: m[2] }; });
   } catch { return []; }
+}
+
+const OUTLETS = {
+  crypto: [["CoinDesk", "https://www.coindesk.com/arc/outboundfeeds/rss/"], ["Cointelegraph", "https://cointelegraph.com/rss"], ["Decrypt", "https://decrypt.co/feed"]],
+  stocks: [["CNBC", "https://www.cnbc.com/id/100003114/device/rss/rss.html"], ["MarketWatch", "https://feeds.content.dowjones.io/public/rss/mw_topstories"]],
+};
+// Headlines from specialist outlets that mention this asset (by name or ticker)
+async function outletNews(a, isCrypto) {
+  const base = (a.name || "").replace(/ (USD|Inc\.?|Corp\.?|Corporation|Holdings|Group|Ltd\.?|plc|Technologies|Automotive)$/gi, "").trim();
+  const keys = [base, a.symbol.replace("-USD", "").replace("^", "")].filter(k => k && k.length >= 3).map(k => k.toLowerCase());
+  if (!keys.length) return [];
+  const lists = await Promise.all(OUTLETS[isCrypto ? "crypto" : "stocks"].map(async ([src, url]) => {
+    try {
+      const r = await fetch(url, { headers: UA, signal: AbortSignal.timeout(3500) });
+      if (!r.ok) return [];
+      const x = await r.text();
+      return [...x.matchAll(/<item>[\s\S]*?<title>([\s\S]*?)<\/title>[\s\S]*?<\/item>/g)]
+        .map(m => m[1].replace(/<!\[CDATA\[|\]\]>/g, "").replace(/&amp;/g, "&").replace(/&#39;|&#x27;/g, "'").replace(/&quot;/g, '"').trim())
+        .filter(t => keys.some(k => new RegExp(`\\b${k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(t)))
+        .slice(0, 3).map(title => ({ title, source: src }));
+    } catch { return []; }
+  }));
+  return lists.flat();
 }
 
 async function yahooNews(q) {
@@ -376,7 +434,7 @@ async function coinPrice(id, symbol) {
     const r = await fetch(`https://api.coingecko.com/api/v3/coins/${id}/market_chart?vs_currency=usd&days=180&interval=daily`, { headers: UA, signal: AbortSignal.timeout(4500) });
     if (!r.ok) return { symbol, error: "price data unavailable" };
     const p = ((await r.json()).prices || []).map(x => x[1]);
-    return summarize(symbol, p, p, p, { currency: "USD", asOf: new Date().toISOString() });
+    return Object.assign(summarize(symbol, p, p, p, { currency: "USD", asOf: new Date().toISOString() }), { src: "CoinGecko" });
   } catch { return { symbol, error: "price data unavailable" }; }
 }
 
