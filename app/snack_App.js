@@ -162,6 +162,7 @@ const S = {
 // OKX connection + AI trade plan strings
 const X = {
   darija: {
+    blockedHint: "💡 جرب تشريها بيدك ف تطبيق OKX: إلا OKX طلب منك توافق على شي شروط ولا تحقق ديال هاد العملة، وافق وعاود. إلا حتى ف تطبيق OKX ما خلاكش، فهادي قيود ديال OKX على البلاد ديالك وما عندنا ما نديرو. غادي نتفكر هاد العملة وما نقترحهاش عليك مرة أخرى. جرب SOL ولا BTC ولا ETH.",
     soldButBuyFailed: (sold, b, why) => `⚠️ بعت ${sold} والفلوس ولاو USDT ف الحساب ديالك (ما ضاعو)، ولكن الشرا ديال ${b} ما تداش:\n${why}`,
     progress: ["كنجمع الثمن والأخبار...", "كنحلل الشارت والمؤشرات...", "كنكتب ليك الجواب..."],
     pendingTitle: "⏳ أوامر كتسنى الثمن", noPending: "ما كاين حتى أمر كيتسنى.", cancelOrder: "لغي",
@@ -207,6 +208,7 @@ const X = {
     okxErr: (c, b) => ({ "50123": `🚫 OKX ما كيخليكش تداول ${b || "هاد العملة"} من الحساب ديالك (قيود ديال البلاد على هاد العملة، ولا المفتاح ما فيهش صلاحية Trade ليها). ختار عملة أخرى.`, "50120": "🔑 المفتاح ديال API ما فيهش صلاحية Trade. ف OKX ← API، فعل Trade (بلا Withdraw) وعاود ربط.", insufficient_usdt: "الـUSDT ما كافيش ف OKX.", below_min_size: "المبلغ صغير بزاف على OKX.", plan_out_of_date: "الثمن تبدل بزاف، طلب خطة جديدة.", instrument_not_found: "هاد العملة ما كايناش ف OKX مقابل USDT.", nothing_to_sell: "ما كاين والو باش يتباع.", network: "مشكل ف الاتصال بـOKX.", "50113": "المفاتيح غالطين (Secret).", "50111": "API key غالط.", "50105": "Passphrase غالط.", "50101": "هاد المفتاح ماشي ديال هاد الوضع (Demo/Live).", "50119": "API key ما كاينش.", "51008": "الرصيد ما كافيش." }[c] || "خطأ من OKX: " + c),
   },
   ar: {
+    blockedHint: "💡 جرّب شراءها يدويًا من تطبيق OKX: إذا طلب منك OKX الموافقة على شروط أو تحققًا لهذه العملة فوافق وأعد المحاولة. إذا منعك تطبيق OKX أيضًا فهذه قيود OKX على بلدك ولا يمكننا تجاوزها. سأتذكر هذه العملة ولن أقترحها مجددًا. جرّب SOL أو BTC أو ETH.",
     soldButBuyFailed: (sold, b, why) => `⚠️ بعت ${sold} وأصبح المبلغ USDT في حسابك (لم يضِع)، لكن شراء ${b} لم يتم:\n${why}`,
     progress: ["أجمع السعر والأخبار...", "أحلل الرسم البياني والمؤشرات...", "أكتب لك الجواب..."],
     pendingTitle: "⏳ أوامر تنتظر السعر", noPending: "لا توجد أوامر منتظرة.", cancelOrder: "إلغاء",
@@ -252,6 +254,7 @@ const X = {
     okxErr: (c, b) => ({ "50123": `🚫 لا يسمح OKX لحسابك بتداول ${b || "هذه العملة"} (قيود بلدك على هذه العملة أو صلاحيات المفتاح). اختر عملة أخرى.`, "50120": "🔑 مفتاح API بدون صلاحية التداول. في OKX ← API فعّل Trade (بدون سحب) وأعد الربط.", insufficient_usdt: "رصيد USDT غير كافٍ في OKX.", below_min_size: "المبلغ أصغر من الحد الأدنى في OKX.", plan_out_of_date: "تغير السعر كثيرًا، اطلب خطة جديدة.", instrument_not_found: "هذه العملة غير متاحة مقابل USDT في OKX.", nothing_to_sell: "لا يوجد ما يُباع.", network: "مشكلة في الاتصال بـOKX.", "50113": "المفتاح السري غير صحيح.", "50111": "API key غير صحيح.", "50105": "Passphrase غير صحيح.", "50101": "هذا المفتاح لا يطابق الوضع (تجريبي/حقيقي).", "50119": "API key غير موجود.", "51008": "الرصيد غير كافٍ." }[c] || "خطأ من OKX: " + c),
   },
   fr: {
+    blockedHint: "💡 Essaie de l'acheter à la main dans l'app OKX : si OKX te demande d'accepter des conditions pour cette crypto, accepte puis réessaie. Si l'app OKX bloque aussi, c'est une restriction d'OKX pour ton pays. Je ne te la proposerai plus. Essaie SOL, BTC ou ETH.",
     soldButBuyFailed: (sold, b, why) => `⚠️ ${sold} vendu, l'argent est en USDT sur ton compte (rien de perdu), mais l'achat de ${b} a échoué :\n${why}`,
     progress: ["Je récupère le prix et les news...", "J'analyse le graphique...", "J'écris la réponse..."],
     pendingTitle: "⏳ Ordres en attente", noPending: "Aucun ordre en attente.", cancelOrder: "Annuler",
@@ -297,6 +300,7 @@ const X = {
     okxErr: (c, b) => ({ "50123": `🚫 OKX n'autorise pas ton compte à trader ${b || "cette crypto"} (restriction de pays ou permissions de la clé). Choisis une autre crypto.`, "50120": "🔑 La clé API n'a pas la permission Trade. Active Trade (sans Withdraw) dans OKX → API puis reconnecte.", insufficient_usdt: "USDT insuffisant sur OKX.", below_min_size: "Montant sous le minimum OKX.", plan_out_of_date: "Le prix a trop bougé, demande un nouveau plan.", instrument_not_found: "Paire USDT introuvable sur OKX.", nothing_to_sell: "Rien à vendre.", network: "Problème de connexion à OKX.", "50113": "Secret incorrect.", "50111": "API key incorrecte.", "50105": "Passphrase incorrecte.", "50101": "Clé ne correspond pas au mode (Démo/Réel).", "50119": "API key inexistante.", "51008": "Solde insuffisant." }[c] || "Erreur OKX : " + c),
   },
   en: {
+    blockedHint: "💡 Try buying it by hand in the OKX app: if OKX asks you to accept terms for this coin, accept and retry. If the OKX app blocks it too, it's an OKX restriction for your country that we can't bypass. I won't suggest this coin again. Try SOL, BTC or ETH.",
     soldButBuyFailed: (sold, b, why) => `⚠️ Sold ${sold}; the money is now USDT in your account (nothing lost), but buying ${b} failed:\n${why}`,
     progress: ["Fetching price and news...", "Reading the chart and indicators...", "Writing your answer..."],
     pendingTitle: "⏳ Orders waiting for price", noPending: "No waiting orders.", cancelOrder: "Cancel",
@@ -770,6 +774,10 @@ export default function App() {
   const refreshBal = useCallback(async () => { if (!okx) { setOkxBal(null); return null; } try { const b = await okx.balances(); setOkxBal(b); return b; } catch { return null; } }, [okx]);
   const tradesRef = useRef(okxTrades); tradesRef.current = okxTrades;
   const langRef = useRef(lang); langRef.current = lang;
+  // Coins OKX refused for this account (error 50123): remembered so Kim never proposes or tries them again.
+  const [okxBlocked, setOkxBlockedState] = useState([]);
+  const blockedRef = useRef(okxBlocked); blockedRef.current = okxBlocked;
+  const blockCoin = (instId) => setOkxBlockedState((prev) => { if (prev.includes(instId)) return prev; const n = [...prev, instId].slice(-50); blockedRef.current = n; store.set("okxBlocked", n); return n; });
   const [okxPending, setOkxPendingState] = useState([]);
   const pendingRef = useRef(okxPending); pendingRef.current = okxPending;
   const setOkxPending = (fn) => setOkxPendingState((prev) => { const n = typeof fn === "function" ? fn(prev) : fn; pendingRef.current = n; store.set("okxPending", n); return n; });
@@ -816,7 +824,7 @@ export default function App() {
   };
   // Scan OKX (public data, on the phone) and let the AI pick at most one coin.
   const scanAndPick = async (goal, exclude = []) => {
-    let cands = (await scanMarket()).filter((c) => !exclude.includes(c.instId));
+    let cands = (await scanMarket()).filter((c) => !exclude.includes(c.instId) && !blockedRef.current.includes(c.instId));
     if (okx) { const ok2 = await Promise.all(cands.map((c) => okx.canTrade(c.instId))); cands = cands.filter((c, i) => ok2[i] !== false); } // skip coins this account can't trade
     if (!cands.length) return { pick: null, summary: "" };
     return (await api("/pick", { method: "POST", body: JSON.stringify({ candidates: cands, goal, lang: langRef.current }) })).pick;
@@ -856,10 +864,10 @@ export default function App() {
           const pick = await scanAndPick({ targetPct: m.targetPct, days: m.days, pnlPct: +pnl.toFixed(2), daysLeft: Math.ceil((m.endsAt - Date.now()) / 86400000) }, open.map((x) => x.instId));
           if (pick && pick.pick) {
             const base = pick.pick.split("-")[0];
-            const log = await openPosition(base, base + "-USD", pick, usdt, { mission: true, source: "mission" });
+            const log = await openPosition(base, base + "-USD", pick, usdt, { mission: true, source: "mission" }).catch((e) => { e.instId = pick.pick; throw e; });
             if (log.fill) addEvent(tt.missionBought(base, usdt, pick));
           }
-        } catch (e) { /* retry next cycle */ }
+        } catch (e) { if (e && e.code === "50123" && e.instId) blockCoin(e.instId); /* retry next cycle */ }
       }
       return;
     }
@@ -867,7 +875,7 @@ export default function App() {
   };
 
   const okxProps = { okx, okxCreds, setOkxCreds, okxCfg, setOkxCfg, okxTrades, setOkxTrades, okxBal, refreshBal, okxEvents, addEvent,
-    mission, startMission, stopMission, scanAndPick, openPosition, closeOpen, okxPending, setOkxPending, cancelPending };
+    mission, startMission, stopMission, scanAndPick, openPosition, closeOpen, okxPending, setOkxPending, cancelPending, okxBlocked, blockCoin };
 
   // Live OKX balance (every 60 s) + AI trade manager (every 5 min) while the app is open.
   useEffect(() => {
@@ -912,6 +920,7 @@ export default function App() {
     setOkxEventsState(await store.get("okxEvents", []));
     setMissionState(await store.get("mission", null));
     setOkxPendingState(await store.get("okxPending", []));
+    setOkxBlockedState(await store.get("okxBlocked", []));
     const pp = await store.get("paper", null);
     if (pp) setPaperState(await runPaperBot(pp, strings(await store.get("lang", "darija")))); // bot catches up on news since last open
     const s = await store.get("sub", { trialStart: null, plan: null });
@@ -1052,7 +1061,7 @@ function Chat({ t, rtl, lang, seed, okxProps }) {
   const [busy, setBusy] = useState(false);
   const listRef = useRef(null);
   const actions = useRef({});
-  const { okx, okxCfg, okxTrades, setOkxTrades, refreshBal, okxBal, mission, startMission, stopMission, scanAndPick, openPosition, closeOpen, setOkxPending, addEvent, okxPending, cancelPending } = okxProps;
+  const { okx, okxCfg, okxTrades, setOkxTrades, refreshBal, okxBal, mission, startMission, stopMission, scanAndPick, openPosition, closeOpen, setOkxPending, addEvent, okxPending, cancelPending, okxBlocked, blockCoin } = okxProps;
   const askLive = (text, label, fn) => { const id = "act" + Date.now(); actions.current[id] = fn; say(text + "\n\n" + t.chatConfirmLive, { action: { id, label } }); };
 
   const say = (text, extra) => setMsgs((m) => [...m.filter((x) => !x.pending), { id: "b" + Date.now() + Math.random(), me: false, text, ...extra }]);
@@ -1066,6 +1075,7 @@ function Chat({ t, rtl, lang, seed, okxProps }) {
     if (!isCrypto) return say(t.notCryptoOkx);
     const base = a.symbol.replace(/\d*-USD$/, ""), instId = base + "-USDT";
     const live = !okx.demo;
+    if (ti.intent !== "close" && (okxBlocked || []).includes(instId)) return say(t.okxErr("50123", base) + "\n\n" + t.blockedHint);
     if (ti.intent === "close") {
       const mine = okxTrades.filter((x) => x.open && x.instId === instId && x.demo === okx.demo);
       if (!mine.length) return say(t.chatNoOpenTrade(base));
@@ -1122,9 +1132,10 @@ function Chat({ t, rtl, lang, seed, okxProps }) {
         } else finish(await executePlan(okx, { base, usdt, takeProfit: plan.takeProfit, stopLoss: plan.stopLoss }));
         refreshBal();
       } catch (e) {
+        if (e.code === "50123") blockCoin(instId);
         if (sale && e.code !== "entry_above_price") { refreshBal(); return say(t.soldButBuyFailed(sale.sold, base, t.okxErr(e.code || "network", base))); }
-        if (e.code === "entry_above_price") { try { finish(await executePlan(okx, { base, usdt, takeProfit: plan.takeProfit, stopLoss: plan.stopLoss })); } catch (e2) { okxFail(e2); } }
-        else okxFail(e);
+        if (e.code === "entry_above_price") { try { finish(await executePlan(okx, { base, usdt, takeProfit: plan.takeProfit, stopLoss: plan.stopLoss })); } catch (e2) { if (e2.code === "50123") blockCoin(instId); okxFail(e2); } }
+        else { say(t.okxErr(e.code || "network", base) + (e.code === "50123" ? "\n\n" + t.blockedHint : "")); }
       }
     };
     const shownUsdt = spendAllAfterSale ? Math.floor((free + sale.estUsdt) * 0.995 * 100) / 100 : usdt;
@@ -1154,6 +1165,7 @@ function Chat({ t, rtl, lang, seed, okxProps }) {
     const usdtFree = okxBal && okxBal.ccy.USDT ? okxBal.ccy.USDT.avail : null;
     const ctx = { connected: !!okx, demo: okx ? okx.demo : null, balanceUsd: okxBal ? +okxBal.totalUsd.toFixed(2) : null, usdtFree: usdtFree != null ? +usdtFree.toFixed(2) : null,
       openTrades: okxTrades.filter((x) => x.open && okx && x.demo === okx.demo).map((x) => ({ coin: x.instId, qty: x.qty, entry: x.fill && x.fill.avgPx, sl: x.sl, tp: x.tp, byMission: !!x.mission })),
+      blockedCoins: (okxBlocked || []).map((x) => x.replace("-USDT", "")),
       holdings: okxBal ? Object.entries(okxBal.ccy).filter(([, v]) => v.usd >= 1).map(([c, v]) => ({ coin: c, usd: +v.usd.toFixed(2) })) : null,
       waitingOrders: (okxPending || []).filter((p) => okx && p.demo === okx.demo).map((p) => ({ coin: p.instId, buyAt: p.entry, now: p.lastPx, usdt: p.usdt })),
       mission: mission && mission.active ? { capital: mission.capital, targetPct: mission.targetPct, days: mission.days, pnlPct: +(mission.pnl || 0).toFixed(2), daysLeft: Math.max(0, Math.ceil((mission.endsAt - Date.now()) / 86400000)) } : null };
