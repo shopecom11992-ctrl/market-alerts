@@ -1,5 +1,5 @@
 // Offline tests for the WhatsApp Q&A worker: Gemini (+Google Search), Yahoo, CoinGecko, Google News and Green-API are mocked.
-import worker, { parseWebhook, summarize, localSymbols, resolveAsset, rankModels, candidateWords, nice } from "./worker.js";
+import worker, { parseWebhook, summarize, localSymbols, resolveAsset, rankModels, candidateWords, nice, searchAssets, chartData } from "./worker.js";
 import assert from "node:assert/strict";
 
 const env = { GEMINI_API_KEY: "g", GREENAPI_TOKEN: "t", GREENAPI_URL: "https://7107.api.greenapi.com",
@@ -14,6 +14,7 @@ const YQ = { // Yahoo search: query -> quotes
   "pltr": [{ symbol: "PLTR", longname: "Palantir Technologies", quoteType: "EQUITY" }],
   "alibaba": [{ symbol: "BABA", longname: "Alibaba Group", quoteType: "EQUITY" }],
   "pepe coin": [], "pepe": [],
+  "sui": [{ symbol: "SUI", longname: "Sun Communities, Inc.", quoteType: "EQUITY", exchDisp: "NYSE" }, { symbol: "SUI20947-USD", shortname: "Sui USD", quoteType: "CRYPTOCURRENCY" }],
 };
 
 globalThis.fetch = async (url, opt = {}) => {
@@ -60,6 +61,7 @@ globalThis.fetch = async (url, opt = {}) => {
   }
   if (url.includes("coingecko.com/api/v3/search")) {
     const q = new URL(url).searchParams.get("query").toLowerCase();
+    if (q === "sui") return Response.json({ coins: [{ id: "sui", symbol: "SUI", name: "Sui", market_cap_rank: 20 }] });
     return Response.json({ coins: /pepe/.test(q) ? [{ id: "pepe", symbol: "PEPE", name: "Pepe" }] : /hyperliquid/.test(q) ? [{ id: "hyperliquid", symbol: "HYPE", name: "Hyperliquid" }] : [] });
   }
   if (/coindesk|cointelegraph|decrypt\.co|cnbc|dowjones/.test(url)) return new Response(`<rss><item><title>Nvidia stock jumps on AI demand</title></item><item><title>Pepe memecoin rallies 20%</title></item><item><title>Unrelated story</title></item></rss>`);
@@ -68,7 +70,7 @@ globalThis.fetch = async (url, opt = {}) => {
     market_data: { current_price: { usd: 0.0000160 }, market_cap: { usd: 6e9 }, total_volume: { usd: 8e8 }, ath: { usd: 0.0000284 }, ath_change_percentage: { usd: -43 } } });
   if (url.includes("stooq")) return new Response("Date,Open,High,Low,Close,Volume\n" + closes.map((c, i) => `2026-01-${i},${c},${c + 1},${c - 1},${c},1`).join("\n"));
   if (url.includes("news.google")) return new Response("<rss><item><title>Google headline</title><pubDate>Tue, 24 Nov 2026 10:00:00 GMT</pubDate></item></rss>");
-  if (url.includes("state/state.json")) return Response.json({ alerts: [{ title: "Old alert", ts: "2026-11-24T10:00:00Z", link: "https://x/1" }, { title: "Fed cuts rates", ts: "2026-11-25T10:00:00Z", link: "https://x/2", msg: "🔴 *الفيد نقص الفائدة*" }] });
+  if (url.includes("state/state.json")) return Response.json({ alerts: [{ title: "Old alert", ts: "2026-11-24T10:00:00Z", link: "https://x/1" }, { title: "Fed cuts rates", ts: "2026-11-25T10:00:00Z", link: "https://x/2", msg: "🔴 *الفيد نقص الفائدة*", impact: 9, ideas: [{ symbol: "BTC-USD", direction: "up" }] }] });
   if (url.includes("greenapi")) { sent.push(JSON.parse(opt.body)); return Response.json({ idMessage: "X" }); }
   throw new Error("unexpected url " + url);
 };
@@ -198,6 +200,15 @@ r = await apiCall("/api/resolve?q=rivian");
 ok(r.body.asset.symbol === "RIVN", "GET /api/resolve finds any ticker for the watchlist search");
 r = await apiCall("/api/alerts");
 ok(r.body.alerts[0].title === "Fed cuts rates" && r.body.alerts[0].msg.includes("الفيد"), "GET /api/alerts returns newest alerts first, with full Darija text");
+ok(r.body.alerts[0].ideas[0].symbol === "BTC-USD" && r.body.alerts[0].impact === 9, "alerts carry structured trade ideas for the paper bot");
+const sr = await searchAssets("sui");
+ok(sr[0].type === "crypto" && sr[0].cgId === "sui" && sr[0].symbol === "SUI20947-USD" && sr.some(x => x.symbol === "SUI" && x.type === "stock"), "search 'sui': both the coin (first) and the stock are offered, no duplicates");
+r = await apiCall("/api/chart?symbol=NVDA&range=3mo");
+ok(r.body.points.length === 0 || r.body.points.length > 1, "chart endpoint responds");
+const ch = await chartData("PEPE-USD", "1mo", "pepe");
+ok(ch.src === "CoinGecko" && ch.points.length > 1, "chart falls back to CoinGecko for coins Yahoo doesn't list");
+r = await apiCall("/api/chart?symbol=" + encodeURIComponent("<script>"));
+ok(r.status === 400, "chart rejects bad symbols");
 r = await apiCall("/api/nope");
 ok(r.status === 404, "unknown API path -> 404");
 const opt = await worker.fetch(new Request("https://x.workers.dev/api/chat", { method: "OPTIONS" }), env, { waitUntil() {} });

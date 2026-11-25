@@ -89,6 +89,15 @@ export async function api(request, url, env) {
       if (!text) return json({ error: "empty" }, 400);
       return json({ reply: await answer(text, env, lang) });
     }
+    if (url.pathname === "/api/search") {
+      return json({ results: await searchAssets(url.searchParams.get("q") || "") });
+    }
+    if (url.pathname === "/api/chart") {
+      const sym = (url.searchParams.get("symbol") || "").toUpperCase().trim();
+      const range = ["5d", "1mo", "3mo", "1y"].includes(url.searchParams.get("range")) ? url.searchParams.get("range") : "1mo";
+      if (!/^[\^A-Z0-9.=\-]{1,20}$/.test(sym)) return json({ error: "bad_symbol" }, 400);
+      return json(await chartData(sym, range, url.searchParams.get("cg") || ""));
+    }
     if (url.pathname === "/api/resolve") {
       const r = await resolveAsset(url.searchParams.get("q") || "");
       return json({ asset: r });
@@ -105,7 +114,7 @@ export async function api(request, url, env) {
       const r = await fetch(env.STATE_URL || "https://raw.githubusercontent.com/shopecom11992-ctrl/market-alerts/main/state/state.json", { headers: UA, signal: AbortSignal.timeout(5000) });
       const st = r.ok ? await r.json() : {};
       const alerts = (st.alerts || []).filter(a => a.title).slice(-40).reverse()
-        .map(a => ({ title: a.title, link: a.link, ts: a.ts, msg: a.msg || null }));
+        .map(a => ({ title: a.title, link: a.link, ts: a.ts, msg: a.msg || null, impact: a.impact || null, ideas: Array.isArray(a.ideas) ? a.ideas.slice(0, 4) : [] }));
       return json({ alerts });
     }
     return json({ error: "not_found" }, 404);
@@ -358,6 +367,64 @@ export async function resolveAsset(q) {
   const cg = await coingeckoSearch(q);
   if (cg) return { symbol: cg.symbol.toUpperCase() + "-USD", name: cg.name, type: "CRYPTOCURRENCY", cgId: cg.id };
   return null;
+}
+
+// Several matches for the app's search box: stocks/ETFs/indices from Yahoo + coins from CoinGecko.
+const TYPE_LABEL = { EQUITY: "stock", ETF: "etf", CRYPTOCURRENCY: "crypto", INDEX: "index", FUTURE: "commodity", CURRENCY: "fx", MUTUALFUND: "fund" };
+export async function searchAssets(q) {
+  q = String(q || "").trim().slice(0, 40);
+  if (!q) return [];
+  const [y, cg] = await Promise.all([
+    fetch(`https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=10&newsCount=0`, { headers: UA, signal: AbortSignal.timeout(4000) })
+      .then(r => r.ok ? r.json() : {}).then(j => (j.quotes || []).filter(x => OK_TYPES.includes(x.quoteType))).catch(() => []),
+    fetch(`https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(q)}`, { headers: UA, signal: AbortSignal.timeout(4000) })
+      .then(r => r.ok ? r.json() : {}).then(j => (j.coins || []).slice(0, 6)).catch(() => []),
+  ]);
+  const out = [];
+  const seen = new Set();
+  const push = (o) => { const k = o.symbol.toUpperCase(); if (!seen.has(k)) { seen.add(k); out.push(o); } };
+  for (const c of cg) {
+    const yq = y.find(x => x.quoteType === "CRYPTOCURRENCY" && x.symbol.toUpperCase().replace(/\d+-USD$/, "-USD") === c.symbol.toUpperCase() + "-USD");
+    push({ symbol: yq ? yq.symbol : c.symbol.toUpperCase() + "-USD", name: c.name, type: "crypto", rank: c.market_cap_rank || null, cgId: c.id, base: c.symbol.toUpperCase(), thumb: c.thumb || null });
+  }
+  for (const x of y) {
+    if (x.quoteType === "CRYPTOCURRENCY" && out.some(o => o.symbol === x.symbol)) continue;
+    push({ symbol: x.symbol, name: x.longname || x.shortname || x.symbol, type: TYPE_LABEL[x.quoteType] || "other", exchange: x.exchDisp || x.exchange || null,
+           base: x.quoteType === "CRYPTOCURRENCY" ? x.symbol.replace(/-USD$/, "").replace(/\d+$/, "") : null });
+  }
+  // exact ticker / name matches first, then crypto by market-cap rank, then the rest
+  const ql = q.toLowerCase();
+  const score = o => (o.symbol.toLowerCase().replace("-usd", "") === ql || o.name.toLowerCase() === ql ? 0 : 1) * 1000 + (o.rank || 500);
+  return out.sort((a, b) => score(a) - score(b)).slice(0, 12);
+}
+
+// Price history for the app's chart. Yahoo first; CoinGecko for coins Yahoo doesn't list.
+export async function chartData(symbol, range, cgId) {
+  const interval = { "5d": "30m", "1mo": "1d", "3mo": "1d", "1y": "1d" }[range];
+  try {
+    const r = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=${interval}`, { headers: UA, signal: AbortSignal.timeout(5000) });
+    if (r.ok) {
+      const res = ((await r.json()).chart || {}).result;
+      if (res && res[0]) {
+        const ts = res[0].timestamp || [], cl = res[0].indicators.quote[0].close || [];
+        const pts = ts.map((t, i) => [t * 1000, cl[i]]).filter(p => typeof p[1] === "number").map(p => [p[0], nice(p[1])]);
+        if (pts.length > 1) return { symbol, range, currency: res[0].meta.currency || "USD", last: nice(res[0].meta.regularMarketPrice ?? pts[pts.length - 1][1]), points: pts, src: "Yahoo Finance" };
+      }
+    }
+  } catch (e) { console.log("chart yahoo error", e && e.message); }
+  try {
+    let id = cgId;
+    if (!id && symbol.endsWith("-USD")) { const c = await coingeckoSearch(symbol.replace(/-USD$/, "").replace(/\d+$/, "")); id = c && c.id; }
+    if (id) {
+      const days = { "5d": 5, "1mo": 30, "3mo": 90, "1y": 365 }[range];
+      const r = await fetch(`https://api.coingecko.com/api/v3/coins/${id}/market_chart?vs_currency=usd&days=${days}`, { headers: UA, signal: AbortSignal.timeout(5000) });
+      if (r.ok) {
+        const pts = ((await r.json()).prices || []).map(p => [p[0], nice(p[1])]);
+        if (pts.length > 1) return { symbol, range, currency: "USD", last: pts[pts.length - 1][1], points: pts.length > 400 ? pts.filter((_, i) => i % Math.ceil(pts.length / 400) === 0) : pts, src: "CoinGecko" };
+      }
+    }
+  } catch (e) { console.log("chart cg error", e && e.message); }
+  return { symbol, range, points: [], error: "chart_unavailable" };
 }
 
 async function coingeckoSearch(q) {
