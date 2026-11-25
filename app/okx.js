@@ -207,3 +207,21 @@ export async function closeTrade(okx, trade) {
   if (parseFloat(sz) < inst.minSz) throw new OkxError("nothing_to_sell", "nothing_to_sell");
   return okx.marketSell(trade.instId, sz);
 }
+
+// AI manager raised the stop: cancel the old OCO and place a new one (same qty + take-profit, higher stop).
+export async function replaceStop(okx, trade, newStop) {
+  const inst = await okx.instrument(trade.instId);
+  const last = await okx.ticker(trade.instId);
+  if (!(newStop < last)) throw new OkxError("stop_above_price", "stop_above_price");
+  if (trade.algoId) await okx.cancelAlgo(trade.instId, trade.algoId);
+  const sl = roundTo(newStop, inst.tickSz);
+  const algoId = await okx.oco(trade.instId, floorTo(trade.qty, inst.lotSz), trade.tp, sl);
+  return { ...trade, algoId, sl };
+}
+
+// Was the trade already closed on OKX (take-profit / stop-loss hit, or sold manually)? Uses total equity of the coin, incl. frozen.
+export function isGone(bal, trade) {
+  const base = trade.instId.split("-")[0];
+  const eq = (bal.ccy[base] && bal.ccy[base].eq) || 0;
+  return eq < (trade.qty || 0) * 0.5;
+}

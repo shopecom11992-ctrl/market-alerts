@@ -10,7 +10,7 @@ import { Ionicons } from "@expo/vector-icons";
 import Svg, { Defs, Line, LinearGradient, Path, Stop, Text as SvgText } from "react-native-svg";
 import * as SecureStore from "expo-secure-store";
 import { LANGS, isRTL, strings } from "./i18n";
-import { createOkx, executePlan, closeTrade, floorTo } from "./okx";
+import { createOkx, executePlan, closeTrade, replaceStop, isGone } from "./okx";
 
 const API = "https://market-qa-bot.shopecom11992.workers.dev/api";
 const HDR = { "Content-Type": "application/json", "X-App": "kimmarket" };
@@ -56,7 +56,45 @@ export default function App() {
   const setOkxCfg = (c) => { setOkxCfgState(c); store.set("okxCfg", c); };
   const setOkxTrades = (fn) => setOkxTradesState((prev) => { const n = typeof fn === "function" ? fn(prev) : fn; store.set("okxTrades", n.slice(0, 50)); return n; });
   const okx = useMemo(() => (okxCreds ? createOkx(okxCreds) : null), [okxCreds]);
-  const okxProps = { okx, okxCreds, setOkxCreds, okxCfg, setOkxCfg, okxTrades, setOkxTrades };
+  const [okxBal, setOkxBal] = useState(null);
+  const [okxEvents, setOkxEventsState] = useState([]);
+  const addEvent = (text) => setOkxEventsState((prev) => { const n = [{ ts: Date.now(), text }, ...prev].slice(0, 40); store.set("okxEvents", n); return n; });
+  const refreshBal = useCallback(async () => { if (!okx) { setOkxBal(null); return null; } try { const b = await okx.balances(); setOkxBal(b); return b; } catch { return null; } }, [okx]);
+  const okxProps = { okx, okxCreds, setOkxCreds, okxCfg, setOkxCfg, okxTrades, setOkxTrades, okxBal, refreshBal, okxEvents, addEvent };
+
+  // Live OKX balance (every 60 s) + AI trade manager (every 5 min) while the app is open.
+  const tradesRef = useRef(okxTrades); tradesRef.current = okxTrades;
+  const langRef = useRef(lang); langRef.current = lang;
+  useEffect(() => {
+    if (!okx) { setOkxBal(null); return; }
+    let stop = false;
+    const manage = async () => {
+      const tt = strings(langRef.current);
+      const bal = await refreshBal();
+      const open = tradesRef.current.filter((x) => x.open && x.demo === okx.demo);
+      for (const tr of open) {
+        if (stop) return;
+        const base = tr.instId.split("-")[0];
+        try {
+          if (bal && isGone(bal, tr)) { setOkxTrades((prev) => prev.map((x) => (x.ts === tr.ts ? { ...x, open: false, closedAt: Date.now() } : x))); addEvent(tt.managerGone(base)); continue; }
+          if (!tr.sl || !tr.tp || !tr.fill) continue;
+          const { review } = await api("/manage", { method: "POST", body: JSON.stringify({ symbol: tr.symbol || base + "-USD", entry: tr.fill.avgPx, stopLoss: parseFloat(tr.sl), takeProfit: parseFloat(tr.tp), openedAt: tr.ts, lang: langRef.current }) });
+          if (review.action === "close") {
+            await closeTrade(okx, tr);
+            setOkxTrades((prev) => prev.map((x) => (x.ts === tr.ts ? { ...x, open: false, closedAt: Date.now() } : x)));
+            addEvent(tt.managerClose(base, review.reason));
+          } else if (review.action === "tighten") {
+            const moved = await replaceStop(okx, tr, review.newStopLoss);
+            setOkxTrades((prev) => prev.map((x) => (x.ts === tr.ts ? moved : x)));
+            addEvent(tt.managerTight(base, moved.sl, review.reason));
+          }
+        } catch (e) { /* keep the existing OCO; try again next cycle */ }
+      }
+    };
+    manage();
+    const balTimer = setInterval(refreshBal, 60000), mgrTimer = setInterval(manage, 300000);
+    return () => { stop = true; clearInterval(balTimer); clearInterval(mgrTimer); };
+  }, [okx]); // eslint-disable-line react-hooks/exhaustive-deps
   const t = strings(lang), rtl = isRTL(lang);
 
   useEffect(() => { (async () => {
@@ -64,6 +102,7 @@ export default function App() {
     setOkxCreds(await secure.get());
     setOkxCfgState(await store.get("okxCfg", { pct: 10 }));
     setOkxTradesState(await store.get("okxTrades", []));
+    setOkxEventsState(await store.get("okxEvents", []));
     const pp = await store.get("paper", null);
     if (pp) setPaperState(await runPaperBot(pp, strings(await store.get("lang", "darija")))); // bot catches up on news since last open
     const s = await store.get("sub", { trialStart: null, plan: null });
@@ -92,13 +131,14 @@ export default function App() {
       <StatusBar barStyle="light-content" />
       <View style={[st.header, rtl && st.rowRev]}>
         <Text style={st.logo}>📈 {t.appName}</Text>
-        {!sub.plan && <Text style={st.trialPill}>{t.trialLeft(daysLeft)}</Text>}
+        {okxBal ? <Pressable onPress={() => setTab("portfolio")}><Text style={[st.trialPill, { color: C.green }]}>OKX ${fmtMoney(okxBal.totalUsd)}{okx && okx.demo ? " · demo" : ""}</Text></Pressable>
+          : !sub.plan && <Text style={st.trialPill}>{t.trialLeft(daysLeft)}</Text>}
       </View>
       <View style={st.fill}>
         {tab === "alerts" && <Alerts t={t} rtl={rtl} />}
-        {tab === "chat" && <Chat t={t} rtl={rtl} lang={lang} seed={chatSeed} />}
+        {tab === "chat" && <Chat t={t} rtl={rtl} lang={lang} seed={chatSeed} okxProps={okxProps} />}
         {tab === "markets" && <Markets t={t} rtl={rtl} lang={lang} onAnalyse={askAbout} paper={paper} setPaper={setPaper} okxProps={okxProps} />}
-        {tab === "portfolio" && <Portfolio t={t} rtl={rtl} paper={paper} setPaper={setPaper} />}
+        {tab === "portfolio" && <Portfolio t={t} rtl={rtl} paper={paper} setPaper={setPaper} okxProps={okxProps} />}
         {tab === "settings" && <Settings t={t} rtl={rtl} lang={lang} onLang={changeLang} sub={sub} daysLeft={daysLeft} onPlans={() => setShowPaywall(true)} okxProps={okxProps} />}
       </View>
       <View style={[st.tabs, rtl && st.rowRev]}>
@@ -159,23 +199,83 @@ function Alerts({ t, rtl }) {
 }
 
 // ------------------------------------------------------------------ Chat
-function Chat({ t, rtl, lang, seed }) {
+function Chat({ t, rtl, lang, seed, okxProps }) {
   const [msgs, setMsgs] = useState([{ id: "hello", me: false, text: t.chatHello }]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const listRef = useRef(null);
+  const actions = useRef({});
+  const { okx, okxCfg, okxTrades, setOkxTrades, refreshBal } = okxProps;
+
+  const say = (text, extra) => setMsgs((m) => [...m.filter((x) => !x.pending), { id: "b" + Date.now() + Math.random(), me: false, text, ...extra }]);
+  const okxFail = (e) => say(t.okxErr((e && e.code) || "network"));
+
+  // "dir trade f SOL" / "bi3 SOL": Demo executes right away, Live asks for one tap first.
+  const tradeCommand = async (ti) => {
+    if (!okx) return say(t.notConnected);
+    if (!ti.asset) return say(t.chatTradeNoAsset);
+    const a = ti.asset, isCrypto = a.type === "crypto" || /-USD$/.test(a.symbol);
+    if (!isCrypto) return say(t.notCryptoOkx);
+    const base = a.symbol.replace(/\d*-USD$/, ""), instId = base + "-USDT";
+    const live = !okx.demo;
+    if (ti.intent === "close") {
+      const mine = okxTrades.filter((x) => x.open && x.instId === instId && x.demo === okx.demo);
+      if (!mine.length) return say(t.chatNoOpenTrade(base));
+      const doClose = async () => {
+        try { for (const tr of mine) { await closeTrade(okx, tr); setOkxTrades((prev) => prev.map((x) => (x.ts === tr.ts ? { ...x, open: false, closedAt: Date.now() } : x))); } say(t.chatClosed(base)); refreshBal(); }
+        catch (e) { okxFail(e); }
+      };
+      if (!live) return doClose();
+      const id = "act" + Date.now(); actions.current[id] = doClose;
+      return say(t.chatCloseConfirm(base) + "\n" + t.chatConfirmLive, { action: { id, label: t.closeTrade } });
+    }
+    let plan;
+    try { plan = (await api("/plan", { method: "POST", body: JSON.stringify({ symbol: a.symbol, name: a.name, cgId: a.cgId, type: "crypto", lang }) })).plan; }
+    catch (e) { return say(t.error); }
+    if (plan.action !== "buy") return say(t.chatPlanWait(base, plan.summary || ""));
+    let free = 0;
+    try { const b = await okx.balances(); free = (b.ccy.USDT && b.ccy.USDT.avail) || 0; } catch (e) { return okxFail(e); }
+    const usdt = Math.floor(free * (okxCfg.pct || 10)) / 100;
+    if (!(usdt > 0)) return say(t.okxErr("insufficient_usdt"));
+    const doOpen = async () => {
+      try {
+        const log = await executePlan(okx, { base, usdt, takeProfit: plan.takeProfit, stopLoss: plan.stopLoss });
+        if (log.fill) setOkxTrades((prev) => [{ ...log, symbol: a.symbol, open: true, source: "chat" }, ...prev]);
+        if (log.error === "oco_failed" || log.error === "oco_too_small") say(t.ocoFailed);
+        else if (log.error) say(t.okxErr(log.error));
+        else say(t.done(log.qty, base, fmtPrice(log.fill.avgPx)));
+        refreshBal();
+      } catch (e) { okxFail(e); }
+    };
+    const text = t.chatPlanBuy(base, fmtMoney(usdt), plan) + "\n\n" + t.planDisclaimer;
+    if (!live) { say(text); return doOpen(); }
+    const id = "act" + Date.now(); actions.current[id] = doOpen;
+    say(text + "\n\n" + t.chatConfirmLive, { action: { id, label: t.confirmBtn } });
+  };
+
+  const runAction = async (m) => {
+    const fn = actions.current[m.action.id]; if (!fn || busy) return;
+    delete actions.current[m.action.id];
+    setMsgs((all) => [...all.map((x) => (x.id === m.id ? { ...x, action: null } : x)), { id: "p" + Date.now(), me: false, pending: true, text: t.executing }]);
+    setBusy(true); await fn(); setBusy(false);
+  };
 
   const send = useCallback(async (text) => {
     const q = (text || "").trim();
     if (!q || busy) return;
     setInput(""); setBusy(true);
     setMsgs((m) => [...m, { id: "u" + Date.now(), me: true, text: q }, { id: "p" + Date.now(), me: false, pending: true, text: t.thinking }]);
+    if (/(trade|trad|ترايد|تريد|صفقة|buy|chri|شري|bi3|بيع|sell|\bsed|سد|close|achet|vend|khrej|خرج)/i.test(q)) {
+      let ti = null;
+      try { ti = await api("/intent", { method: "POST", body: JSON.stringify({ text: q }) }); } catch {}
+      if (ti && ti.intent) { await tradeCommand(ti); setBusy(false); return; }
+    }
     let reply;
     try { reply = (await api("/chat", { method: "POST", body: JSON.stringify({ text: q, lang }) })).reply; }
     catch (e) { reply = e.code === "rate_limited" ? t.rateLimited : t.error; }
     setMsgs((m) => [...m.filter((x) => !x.pending), { id: "b" + Date.now(), me: false, text: stripMd(reply) }]);
     setBusy(false);
-  }, [busy, lang, t]);
+  }, [busy, lang, t, okx, okxCfg, okxTrades]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { if (seed && seed.q) send(seed.q); }, [seed]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setTimeout(() => listRef.current && listRef.current.scrollToEnd({ animated: true }), 50); }, [msgs]);
@@ -191,6 +291,7 @@ function Chat({ t, rtl, lang, seed }) {
           <View style={[st.bubble, item.me ? st.me : st.bot, item.me ? (rtl ? st.left : st.right) : (rtl ? st.right : st.left)]}>
             {item.pending ? <View style={[st.row, { gap: 8 }]}><ActivityIndicator size="small" color={C.accent} /><Text style={st.sub}>{item.text}</Text></View>
               : <Text selectable style={[st.bubbleText, rtl && st.rtl]}>{item.text}</Text>}
+            {item.action ? <Pressable style={[st.btnSmall, { backgroundColor: C.green, marginTop: 8, alignSelf: rtl ? "flex-end" : "flex-start" }]} onPress={() => runAction(item)}><Text style={st.btnSmallText}>{item.action.label}</Text></Pressable> : null}
           </View>
         )}
         ListFooterComponent={msgs.length <= 1 ? (
@@ -572,6 +673,45 @@ function TradePlan({ t, rtl, lang, asset, base, isCrypto, okx, okxCreds, okxCfg,
   );
 }
 
+
+// ------------------------------------------------------------------ Real OKX wallet (live balance) + AI manager activity
+function OkxWallet({ t, rtl, okx, okxBal, refreshBal, okxTrades, okxEvents }) {
+  const [busy, setBusy] = useState(false);
+  const coins = okxBal ? Object.entries(okxBal.ccy).filter(([, v]) => v.eq > 0 && (v.usd >= 0.5 || v.eq >= 1)).sort((a, b) => b[1].usd - a[1].usd) : [];
+  const open = okxTrades.filter((x) => x.open && x.demo === okx.demo);
+  return (
+    <View style={{ marginBottom: 18 }}>
+      <View style={[st.row, rtl && st.rowRev, { justifyContent: "space-between", alignItems: "center", marginBottom: 6 }]}>
+        <Text style={[st.h1, { marginBottom: 0 }]}>{t.okxWallet}</Text>
+        <Pressable style={st.chip} onPress={async () => { setBusy(true); await refreshBal(); setBusy(false); }}><Text style={st.chipText}>{busy ? "…" : "↻ " + t.refresh}</Text></Pressable>
+      </View>
+      <View style={st.card}>
+        <Text style={[st.sub, rtl && st.rtl]}>{t.totalEquity} · {okx.demo ? t.demoMode : t.liveMode}</Text>
+        <Text style={{ color: C.text, fontSize: 30, fontWeight: "900", textAlign: rtl ? "right" : "left" }}>{okxBal ? "$" + fmtMoney(okxBal.totalUsd) : "…"}</Text>
+        {coins.length ? <Text style={[st.label, { marginTop: 10 }, rtl && st.rtl]}>{t.coins}</Text> : null}
+        {coins.map(([ccy, v]) => (
+          <View key={ccy} style={[st.row, rtl && st.rowRev, { justifyContent: "space-between", paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: C.line }]}>
+            <Text style={[st.body, { marginTop: 0, fontWeight: "800" }]}>{ccy}</Text>
+            <Text style={[st.body, { marginTop: 0 }]}>{fmtQty(v.eq)} · ${fmtMoney(v.usd)}</Text>
+          </View>
+        ))}
+        {open.length ? <Text style={[st.label, { marginTop: 12 }, rtl && st.rtl]}>{t.trades} ({open.length})</Text> : null}
+        {open.map((tr) => (
+          <Text key={tr.ts} style={[st.sub, { marginTop: 4 }, rtl && st.rtl]}>{tr.instId} · {fmtQty(tr.qty || 0)} @ {tr.fill ? fmtPrice(tr.fill.avgPx) : "—"}{tr.sl ? ` · SL ${tr.sl} · TP ${tr.tp}` : ""}</Text>
+        ))}
+      </View>
+      <Text style={[st.label, { marginTop: 12 }, rtl && st.rtl]}>{t.managerTitle}</Text>
+      <View style={st.card}>
+        <Text style={[st.sub, { fontSize: 12 }, rtl && st.rtl]}>{t.managerDesc}</Text>
+        <Text style={[st.label, { marginTop: 10 }, rtl && st.rtl]}>{t.events}</Text>
+        {okxEvents.length ? okxEvents.slice(0, 8).map((e) => (
+          <Text key={e.ts} style={[st.body, { marginTop: 4, fontSize: 13 }, rtl && st.rtl]}>{fmtTime(new Date(e.ts).toISOString())} · {e.text}</Text>
+        )) : <Text style={[st.sub, rtl && st.rtl]}>{t.noEvents}</Text>}
+      </View>
+    </View>
+  );
+}
+
 // Simple dependency-light line chart (react-native-svg)
 function LineChart({ points, up, range }) {
   const [w, setW] = useState(0);
@@ -658,7 +798,7 @@ async function runPaperBot(p, t) {
   return paper;
 }
 
-function Portfolio({ t, rtl, paper, setPaper }) {
+function Portfolio({ t, rtl, paper, setPaper, okxProps }) {
   const [quotes, setQuotes] = useState({});
   const [refreshing, setRefreshing] = useState(false);
   const [capInput, setCapInput] = useState(String(paper.startCap));
@@ -681,6 +821,7 @@ function Portfolio({ t, rtl, paper, setPaper }) {
   return (
     <ScrollView contentContainerStyle={{ padding: 14, paddingBottom: 40 }} keyboardShouldPersistTaps="handled"
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={C.accent} />}>
+      {okxProps.okx ? <OkxWallet t={t} rtl={rtl} {...okxProps} /> : null}
       <Text style={[st.h1, { marginBottom: 4 }, rtl && st.rtl]}>{t.pfTitle}</Text>
       <Text style={[st.sub, { marginBottom: 12 }, rtl && st.rtl]}>{t.pfNote}</Text>
       <View style={[st.card, st.row, rtl && st.rowRev, { justifyContent: "space-around" }]}>

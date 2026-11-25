@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { sha256, hmacSha256, utf8, base64, sign, floorTo, roundTo, createOkx, executePlan, closeTrade } from "./okx.js";
+import { sha256, hmacSha256, utf8, base64, sign, floorTo, roundTo, createOkx, executePlan, closeTrade, replaceStop, isGone } from "./okx.js";
 let fails = 0; const ok = (c, m) => { console.log((c ? "PASS " : "FAIL ") + m); if (!c) fails++; };
 for (const s of ["", "abc", "a".repeat(55), "a".repeat(56), "a".repeat(64), "a".repeat(1000), "مرحبا 🚀 é"]) {
   ok(Buffer.from(sha256(utf8(s))).toString("hex") === crypto.createHash("sha256").update(s).digest("hex"), "sha256 len " + s.length);
@@ -42,4 +42,10 @@ ok(l2.error === "oco_failed" && l2.errorMsg === "Parameter error", "OCO failure 
 let e; try { await executePlan(okx, { base: "SOL", usdt: 5000, takeProfit: 112, stopLoss: 95 }, async () => {}); } catch (x) { e = x; } ok(e && e.code === "insufficient_usdt", "insufficient USDT blocked before ordering");
 e = null; try { await executePlan(okx, { base: "SOL", usdt: 100, takeProfit: 99, stopLoss: 95 }, async () => {}); } catch (x) { e = x; } ok(e && e.code === "plan_out_of_date", "stale plan (price past TP) blocked");
 e = null; try { await executePlan(okx, { base: "SOL", usdt: 0.5, takeProfit: 112, stopLoss: 95 }, async () => {}); } catch (x) { e = x; } ok(e && e.code === "below_min_size", "below min size blocked");
+state.ocoFail = false; calls.length = 0;
+const moved = await replaceStop(okx, { ...log, algoId: "a1" }, 98.004);
+const cx = calls.find((c) => c.p === "/api/v5/trade/cancel-algos"), no = calls.find((c) => c.p === "/api/v5/trade/order-algo");
+ok(cx && cx.b[0].algoId === "a1" && no && no.b.slTriggerPx === "98.00" && no.b.tpTriggerPx === log.tp && moved.sl === "98.00", "replaceStop: cancel old OCO, new OCO with higher SL, same TP");
+e = null; try { await replaceStop(okx, log, 101); } catch (x) { e = x; } ok(e && e.code === "stop_above_price", "replaceStop refuses stop above price");
+ok(isGone({ ccy: { SOL: { eq: 0.1 } } }, { instId: "SOL-USDT", qty: 1 }) && !isGone({ ccy: { SOL: { eq: 1 } } }, { instId: "SOL-USDT", qty: 1 }), "isGone detects closed positions");
 console.log(fails ? fails + " FAILED" : "ALL OKX TESTS PASSED");

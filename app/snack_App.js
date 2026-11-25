@@ -162,6 +162,14 @@ const S = {
 // OKX connection + AI trade plan strings
 const X = {
   darija: {
+    okxWallet: "💼 الرصيد ديالي ف OKX", totalEquity: "القيمة الكلية", coins: "العملات", refresh: "حدث",
+    chatTradeNoAsset: "فاش بغيتي ندير الترايد؟ كتب مثلا: dir trade f SOL", chatNoOpenTrade: (b) => `ما عندك حتى صفقة مفتوحة من KimMarket ف ${b}.`,
+    chatPlanWait: (b, s) => `⏸️ ما دخلتش ف ${b}: ما كايناش فرصة واضحة دابا.\n\n${s}`,
+    chatPlanBuy: (b, usdt, p) => `✅ لقيت فرصة ف ${b}.\nالدخول ${p.entry} · Stop-loss ${p.stopLoss} (-${p.slPct}%) · Take-profit ${p.takeProfit} (+${p.tpPct}%)\nغادي نخدم بـ ${usdt} USDT.\n\n${p.summary || ""}`,
+    chatClosed: (b) => `✅ سديت الصفقة ف ${b} وبعت بثمن السوق.`, chatConfirmLive: "⚠️ LIVE = فلوس حقيقية. ورك باش تأكد:", chatCloseConfirm: (b) => `نسد الصفقة ف ${b}؟`,
+    managerTitle: "🤖 مدير الصفقات (AI)", managerDesc: "ملي التطبيق محلول، البوت كيراجع الصفقات المفتوحة كل 5 دقايق: يقدر يطلع الـStop-loss باش يحمي الربح، ولا يسد الصفقة إلا تبدل السوق. عمرو ما كيزيد المخاطرة. ملي التطبيق مسدود، الـStop-loss والـTake-profit كيبقاو خدامين ف OKX.",
+    managerTight: (b, sl, r) => `🔒 ${b}: طلعت الـStop-loss لـ ${sl}. ${r}`, managerClose: (b, r) => `🚪 ${b}: سديت الصفقة. ${r}`, managerGone: (b) => `🏁 ${b}: الصفقة تسدات ف OKX (Take-profit ولا Stop-loss).`,
+    events: "آش دار البوت", noEvents: "باقي ما دار والو.",
     okxTitle: "🔗 ربط OKX", okxDesc: "المفاتيح كيتخباو غير فالتيليفون ديالك (مشفرين) وكيمشيو نيشان لـOKX، حتى سيرفر ما كيشوفهم. صايب API key فيه غير صلاحية Trade — عمرك ما تعطي صلاحية Withdraw.",
     apiKey: "API key", apiSecret: "Secret key", passphrase: "Passphrase", demoMode: "🧪 Demo (فلوس تجريبية)", liveMode: "💰 Live (فلوس حقيقية)",
     demoNote: "بدا بـDemo: ف OKX دير Demo trading وصايب API key ديال demo.", liveWarn: "⚠️ Live = فلوسك الحقيقية. التداول فيه مخاطرة كبيرة وممكن تخسر.",
@@ -181,6 +189,14 @@ const X = {
     okxErr: (c) => ({ insufficient_usdt: "الـUSDT ما كافيش ف OKX.", below_min_size: "المبلغ صغير بزاف على OKX.", plan_out_of_date: "الثمن تبدل بزاف، طلب خطة جديدة.", instrument_not_found: "هاد العملة ما كايناش ف OKX مقابل USDT.", nothing_to_sell: "ما كاين والو باش يتباع.", network: "مشكل ف الاتصال بـOKX.", "50113": "المفاتيح غالطين (Secret).", "50111": "API key غالط.", "50105": "Passphrase غالط.", "50101": "هاد المفتاح ماشي ديال هاد الوضع (Demo/Live).", "50119": "API key ما كاينش.", "51008": "الرصيد ما كافيش." }[c] || "خطأ من OKX: " + c),
   },
   ar: {
+    okxWallet: "💼 رصيدي في OKX", totalEquity: "القيمة الإجمالية", coins: "العملات", refresh: "تحديث",
+    chatTradeNoAsset: "على أي أصل تريد الصفقة؟ اكتب مثلًا: dir trade f SOL", chatNoOpenTrade: (b) => `لا توجد صفقة مفتوحة من KimMarket على ${b}.`,
+    chatPlanWait: (b, s) => `⏸️ لم أدخل في ${b}: لا توجد فرصة واضحة الآن.\n\n${s}`,
+    chatPlanBuy: (b, usdt, p) => `✅ وجدت فرصة في ${b}.\nالدخول ${p.entry} · وقف الخسارة ${p.stopLoss} (-${p.slPct}%) · جني الأرباح ${p.takeProfit} (+${p.tpPct}%)\nسأستخدم ${usdt} USDT.\n\n${p.summary || ""}`,
+    chatClosed: (b) => `✅ أغلقت الصفقة على ${b} وبعت بسعر السوق.`, chatConfirmLive: "⚠️ الوضع الحقيقي = أموال حقيقية. اضغط للتأكيد:", chatCloseConfirm: (b) => `إغلاق الصفقة على ${b}؟`,
+    managerTitle: "🤖 مدير الصفقات (AI)", managerDesc: "عندما يكون التطبيق مفتوحًا، يراجع البوت الصفقات كل 5 دقائق: قد يرفع وقف الخسارة لحماية الربح أو يغلق الصفقة إذا تغيّر السوق، ولا يزيد المخاطرة أبدًا. عند إغلاق التطبيق يبقى وقف الخسارة وجني الأرباح فعّالين في OKX.",
+    managerTight: (b, sl, r) => `🔒 ${b}: رفعت وقف الخسارة إلى ${sl}. ${r}`, managerClose: (b, r) => `🚪 ${b}: أغلقت الصفقة. ${r}`, managerGone: (b) => `🏁 ${b}: أُغلقت الصفقة في OKX (جني الأرباح أو وقف الخسارة).`,
+    events: "ماذا فعل البوت", noEvents: "لا شيء بعد.",
     okxTitle: "🔗 ربط OKX", okxDesc: "تُحفظ المفاتيح مشفرة على هاتفك فقط وتُرسل مباشرة إلى OKX، ولا يراها أي خادم. أنشئ مفتاح API بصلاحية Trade فقط — لا تمنح صلاحية السحب أبدًا.",
     apiKey: "API key", apiSecret: "Secret key", passphrase: "Passphrase", demoMode: "🧪 تجريبي (أموال افتراضية)", liveMode: "💰 حقيقي (أموال حقيقية)",
     demoNote: "ابدأ بالوضع التجريبي: فعّل Demo trading في OKX وأنشئ مفتاح API تجريبيًا.", liveWarn: "⚠️ الوضع الحقيقي يستخدم أموالك. التداول عالي المخاطر وقد تخسر.",
@@ -200,6 +216,14 @@ const X = {
     okxErr: (c) => ({ insufficient_usdt: "رصيد USDT غير كافٍ في OKX.", below_min_size: "المبلغ أصغر من الحد الأدنى في OKX.", plan_out_of_date: "تغير السعر كثيرًا، اطلب خطة جديدة.", instrument_not_found: "هذه العملة غير متاحة مقابل USDT في OKX.", nothing_to_sell: "لا يوجد ما يُباع.", network: "مشكلة في الاتصال بـOKX.", "50113": "المفتاح السري غير صحيح.", "50111": "API key غير صحيح.", "50105": "Passphrase غير صحيح.", "50101": "هذا المفتاح لا يطابق الوضع (تجريبي/حقيقي).", "50119": "API key غير موجود.", "51008": "الرصيد غير كافٍ." }[c] || "خطأ من OKX: " + c),
   },
   fr: {
+    okxWallet: "💼 Mon solde OKX", totalEquity: "Valeur totale", coins: "Cryptos", refresh: "Actualiser",
+    chatTradeNoAsset: "Sur quel actif ? Écris par ex. : dir trade f SOL", chatNoOpenTrade: (b) => `Aucun trade KimMarket ouvert sur ${b}.`,
+    chatPlanWait: (b, s) => `⏸️ Pas d'entrée sur ${b} : pas de setup clair.\n\n${s}`,
+    chatPlanBuy: (b, usdt, p) => `✅ Setup trouvé sur ${b}.\nEntrée ${p.entry} · Stop-loss ${p.stopLoss} (-${p.slPct}%) · Take-profit ${p.takeProfit} (+${p.tpPct}%)\nMontant : ${usdt} USDT.\n\n${p.summary || ""}`,
+    chatClosed: (b) => `✅ Trade ${b} fermé au marché.`, chatConfirmLive: "⚠️ RÉEL = argent réel. Appuie pour confirmer :", chatCloseConfirm: (b) => `Fermer le trade ${b} ?`,
+    managerTitle: "🤖 Gestionnaire de trades (IA)", managerDesc: "App ouverte : le bot revoit les trades toutes les 5 min, peut remonter le stop pour protéger le gain ou fermer si le marché change. Il n'augmente jamais le risque. App fermée : stop-loss et take-profit restent actifs sur OKX.",
+    managerTight: (b, sl, r) => `🔒 ${b} : stop remonté à ${sl}. ${r}`, managerClose: (b, r) => `🚪 ${b} : trade fermé. ${r}`, managerGone: (b) => `🏁 ${b} : trade clôturé sur OKX (TP ou SL).`,
+    events: "Actions du bot", noEvents: "Rien pour l'instant.",
     okxTitle: "🔗 Connecter OKX", okxDesc: "Les clés restent chiffrées sur ton téléphone et partent directement vers OKX ; aucun serveur ne les voit. Crée une clé API avec la permission Trade uniquement — jamais Withdraw.",
     apiKey: "API key", apiSecret: "Secret key", passphrase: "Passphrase", demoMode: "🧪 Démo (argent fictif)", liveMode: "💰 Réel (argent réel)",
     demoNote: "Commence en Démo : active Demo trading sur OKX et crée une clé API démo.", liveWarn: "⚠️ Réel = ton vrai argent. Le trading est très risqué, tu peux perdre.",
@@ -219,6 +243,14 @@ const X = {
     okxErr: (c) => ({ insufficient_usdt: "USDT insuffisant sur OKX.", below_min_size: "Montant sous le minimum OKX.", plan_out_of_date: "Le prix a trop bougé, demande un nouveau plan.", instrument_not_found: "Paire USDT introuvable sur OKX.", nothing_to_sell: "Rien à vendre.", network: "Problème de connexion à OKX.", "50113": "Secret incorrect.", "50111": "API key incorrecte.", "50105": "Passphrase incorrecte.", "50101": "Clé ne correspond pas au mode (Démo/Réel).", "50119": "API key inexistante.", "51008": "Solde insuffisant." }[c] || "Erreur OKX : " + c),
   },
   en: {
+    okxWallet: "💼 My OKX balance", totalEquity: "Total value", coins: "Coins", refresh: "Refresh",
+    chatTradeNoAsset: "Which asset? Type e.g.: dir trade f SOL", chatNoOpenTrade: (b) => `No open KimMarket trade on ${b}.`,
+    chatPlanWait: (b, s) => `⏸️ No entry on ${b}: no clear setup right now.\n\n${s}`,
+    chatPlanBuy: (b, usdt, p) => `✅ Found a setup on ${b}.\nEntry ${p.entry} · Stop-loss ${p.stopLoss} (-${p.slPct}%) · Take-profit ${p.takeProfit} (+${p.tpPct}%)\nUsing ${usdt} USDT.\n\n${p.summary || ""}`,
+    chatClosed: (b) => `✅ Closed the ${b} trade at market.`, chatConfirmLive: "⚠️ LIVE = real money. Tap to confirm:", chatCloseConfirm: (b) => `Close the ${b} trade?`,
+    managerTitle: "🤖 Trade manager (AI)", managerDesc: "While the app is open the bot reviews open trades every 5 min: it may raise the stop to protect profit or close if the market turns. It never adds risk. When the app is closed, stop-loss and take-profit keep running on OKX.",
+    managerTight: (b, sl, r) => `🔒 ${b}: raised stop-loss to ${sl}. ${r}`, managerClose: (b, r) => `🚪 ${b}: closed the trade. ${r}`, managerGone: (b) => `🏁 ${b}: trade closed on OKX (take-profit or stop-loss).`,
+    events: "Bot activity", noEvents: "Nothing yet.",
     okxTitle: "🔗 Connect OKX", okxDesc: "Keys stay encrypted on your phone and go straight to OKX; no server ever sees them. Create an API key with Trade permission only — never Withdraw.",
     apiKey: "API key", apiSecret: "Secret key", passphrase: "Passphrase", demoMode: "🧪 Demo (test money)", liveMode: "💰 Live (real money)",
     demoNote: "Start with Demo: switch on Demo trading in OKX and create a demo API key.", liveWarn: "⚠️ Live uses your real money. Trading is high-risk; you can lose.",
@@ -453,6 +485,24 @@ async function closeTrade(okx, trade) {
   return okx.marketSell(trade.instId, sz);
 }
 
+// AI manager raised the stop: cancel the old OCO and place a new one (same qty + take-profit, higher stop).
+async function replaceStop(okx, trade, newStop) {
+  const inst = await okx.instrument(trade.instId);
+  const last = await okx.ticker(trade.instId);
+  if (!(newStop < last)) throw new OkxError("stop_above_price", "stop_above_price");
+  if (trade.algoId) await okx.cancelAlgo(trade.instId, trade.algoId);
+  const sl = roundTo(newStop, inst.tickSz);
+  const algoId = await okx.oco(trade.instId, floorTo(trade.qty, inst.lotSz), trade.tp, sl);
+  return { ...trade, algoId, sl };
+}
+
+// Was the trade already closed on OKX (take-profit / stop-loss hit, or sold manually)? Uses total equity of the coin, incl. frozen.
+function isGone(bal, trade) {
+  const base = trade.instId.split("-")[0];
+  const eq = (bal.ccy[base] && bal.ccy[base].eq) || 0;
+  return eq < (trade.qty || 0) * 0.5;
+}
+
 // ===== App
 
 const API = "https://market-qa-bot.shopecom11992.workers.dev/api";
@@ -499,7 +549,45 @@ export default function App() {
   const setOkxCfg = (c) => { setOkxCfgState(c); store.set("okxCfg", c); };
   const setOkxTrades = (fn) => setOkxTradesState((prev) => { const n = typeof fn === "function" ? fn(prev) : fn; store.set("okxTrades", n.slice(0, 50)); return n; });
   const okx = useMemo(() => (okxCreds ? createOkx(okxCreds) : null), [okxCreds]);
-  const okxProps = { okx, okxCreds, setOkxCreds, okxCfg, setOkxCfg, okxTrades, setOkxTrades };
+  const [okxBal, setOkxBal] = useState(null);
+  const [okxEvents, setOkxEventsState] = useState([]);
+  const addEvent = (text) => setOkxEventsState((prev) => { const n = [{ ts: Date.now(), text }, ...prev].slice(0, 40); store.set("okxEvents", n); return n; });
+  const refreshBal = useCallback(async () => { if (!okx) { setOkxBal(null); return null; } try { const b = await okx.balances(); setOkxBal(b); return b; } catch { return null; } }, [okx]);
+  const okxProps = { okx, okxCreds, setOkxCreds, okxCfg, setOkxCfg, okxTrades, setOkxTrades, okxBal, refreshBal, okxEvents, addEvent };
+
+  // Live OKX balance (every 60 s) + AI trade manager (every 5 min) while the app is open.
+  const tradesRef = useRef(okxTrades); tradesRef.current = okxTrades;
+  const langRef = useRef(lang); langRef.current = lang;
+  useEffect(() => {
+    if (!okx) { setOkxBal(null); return; }
+    let stop = false;
+    const manage = async () => {
+      const tt = strings(langRef.current);
+      const bal = await refreshBal();
+      const open = tradesRef.current.filter((x) => x.open && x.demo === okx.demo);
+      for (const tr of open) {
+        if (stop) return;
+        const base = tr.instId.split("-")[0];
+        try {
+          if (bal && isGone(bal, tr)) { setOkxTrades((prev) => prev.map((x) => (x.ts === tr.ts ? { ...x, open: false, closedAt: Date.now() } : x))); addEvent(tt.managerGone(base)); continue; }
+          if (!tr.sl || !tr.tp || !tr.fill) continue;
+          const { review } = await api("/manage", { method: "POST", body: JSON.stringify({ symbol: tr.symbol || base + "-USD", entry: tr.fill.avgPx, stopLoss: parseFloat(tr.sl), takeProfit: parseFloat(tr.tp), openedAt: tr.ts, lang: langRef.current }) });
+          if (review.action === "close") {
+            await closeTrade(okx, tr);
+            setOkxTrades((prev) => prev.map((x) => (x.ts === tr.ts ? { ...x, open: false, closedAt: Date.now() } : x)));
+            addEvent(tt.managerClose(base, review.reason));
+          } else if (review.action === "tighten") {
+            const moved = await replaceStop(okx, tr, review.newStopLoss);
+            setOkxTrades((prev) => prev.map((x) => (x.ts === tr.ts ? moved : x)));
+            addEvent(tt.managerTight(base, moved.sl, review.reason));
+          }
+        } catch (e) { /* keep the existing OCO; try again next cycle */ }
+      }
+    };
+    manage();
+    const balTimer = setInterval(refreshBal, 60000), mgrTimer = setInterval(manage, 300000);
+    return () => { stop = true; clearInterval(balTimer); clearInterval(mgrTimer); };
+  }, [okx]); // eslint-disable-line react-hooks/exhaustive-deps
   const t = strings(lang), rtl = isRTL(lang);
 
   useEffect(() => { (async () => {
@@ -507,6 +595,7 @@ export default function App() {
     setOkxCreds(await secure.get());
     setOkxCfgState(await store.get("okxCfg", { pct: 10 }));
     setOkxTradesState(await store.get("okxTrades", []));
+    setOkxEventsState(await store.get("okxEvents", []));
     const pp = await store.get("paper", null);
     if (pp) setPaperState(await runPaperBot(pp, strings(await store.get("lang", "darija")))); // bot catches up on news since last open
     const s = await store.get("sub", { trialStart: null, plan: null });
@@ -535,13 +624,14 @@ export default function App() {
       <StatusBar barStyle="light-content" />
       <View style={[st.header, rtl && st.rowRev]}>
         <Text style={st.logo}>📈 {t.appName}</Text>
-        {!sub.plan && <Text style={st.trialPill}>{t.trialLeft(daysLeft)}</Text>}
+        {okxBal ? <Pressable onPress={() => setTab("portfolio")}><Text style={[st.trialPill, { color: C.green }]}>OKX ${fmtMoney(okxBal.totalUsd)}{okx && okx.demo ? " · demo" : ""}</Text></Pressable>
+          : !sub.plan && <Text style={st.trialPill}>{t.trialLeft(daysLeft)}</Text>}
       </View>
       <View style={st.fill}>
         {tab === "alerts" && <Alerts t={t} rtl={rtl} />}
-        {tab === "chat" && <Chat t={t} rtl={rtl} lang={lang} seed={chatSeed} />}
+        {tab === "chat" && <Chat t={t} rtl={rtl} lang={lang} seed={chatSeed} okxProps={okxProps} />}
         {tab === "markets" && <Markets t={t} rtl={rtl} lang={lang} onAnalyse={askAbout} paper={paper} setPaper={setPaper} okxProps={okxProps} />}
-        {tab === "portfolio" && <Portfolio t={t} rtl={rtl} paper={paper} setPaper={setPaper} />}
+        {tab === "portfolio" && <Portfolio t={t} rtl={rtl} paper={paper} setPaper={setPaper} okxProps={okxProps} />}
         {tab === "settings" && <Settings t={t} rtl={rtl} lang={lang} onLang={changeLang} sub={sub} daysLeft={daysLeft} onPlans={() => setShowPaywall(true)} okxProps={okxProps} />}
       </View>
       <View style={[st.tabs, rtl && st.rowRev]}>
@@ -602,23 +692,83 @@ function Alerts({ t, rtl }) {
 }
 
 // ------------------------------------------------------------------ Chat
-function Chat({ t, rtl, lang, seed }) {
+function Chat({ t, rtl, lang, seed, okxProps }) {
   const [msgs, setMsgs] = useState([{ id: "hello", me: false, text: t.chatHello }]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const listRef = useRef(null);
+  const actions = useRef({});
+  const { okx, okxCfg, okxTrades, setOkxTrades, refreshBal } = okxProps;
+
+  const say = (text, extra) => setMsgs((m) => [...m.filter((x) => !x.pending), { id: "b" + Date.now() + Math.random(), me: false, text, ...extra }]);
+  const okxFail = (e) => say(t.okxErr((e && e.code) || "network"));
+
+  // "dir trade f SOL" / "bi3 SOL": Demo executes right away, Live asks for one tap first.
+  const tradeCommand = async (ti) => {
+    if (!okx) return say(t.notConnected);
+    if (!ti.asset) return say(t.chatTradeNoAsset);
+    const a = ti.asset, isCrypto = a.type === "crypto" || /-USD$/.test(a.symbol);
+    if (!isCrypto) return say(t.notCryptoOkx);
+    const base = a.symbol.replace(/\d*-USD$/, ""), instId = base + "-USDT";
+    const live = !okx.demo;
+    if (ti.intent === "close") {
+      const mine = okxTrades.filter((x) => x.open && x.instId === instId && x.demo === okx.demo);
+      if (!mine.length) return say(t.chatNoOpenTrade(base));
+      const doClose = async () => {
+        try { for (const tr of mine) { await closeTrade(okx, tr); setOkxTrades((prev) => prev.map((x) => (x.ts === tr.ts ? { ...x, open: false, closedAt: Date.now() } : x))); } say(t.chatClosed(base)); refreshBal(); }
+        catch (e) { okxFail(e); }
+      };
+      if (!live) return doClose();
+      const id = "act" + Date.now(); actions.current[id] = doClose;
+      return say(t.chatCloseConfirm(base) + "\n" + t.chatConfirmLive, { action: { id, label: t.closeTrade } });
+    }
+    let plan;
+    try { plan = (await api("/plan", { method: "POST", body: JSON.stringify({ symbol: a.symbol, name: a.name, cgId: a.cgId, type: "crypto", lang }) })).plan; }
+    catch (e) { return say(t.error); }
+    if (plan.action !== "buy") return say(t.chatPlanWait(base, plan.summary || ""));
+    let free = 0;
+    try { const b = await okx.balances(); free = (b.ccy.USDT && b.ccy.USDT.avail) || 0; } catch (e) { return okxFail(e); }
+    const usdt = Math.floor(free * (okxCfg.pct || 10)) / 100;
+    if (!(usdt > 0)) return say(t.okxErr("insufficient_usdt"));
+    const doOpen = async () => {
+      try {
+        const log = await executePlan(okx, { base, usdt, takeProfit: plan.takeProfit, stopLoss: plan.stopLoss });
+        if (log.fill) setOkxTrades((prev) => [{ ...log, symbol: a.symbol, open: true, source: "chat" }, ...prev]);
+        if (log.error === "oco_failed" || log.error === "oco_too_small") say(t.ocoFailed);
+        else if (log.error) say(t.okxErr(log.error));
+        else say(t.done(log.qty, base, fmtPrice(log.fill.avgPx)));
+        refreshBal();
+      } catch (e) { okxFail(e); }
+    };
+    const text = t.chatPlanBuy(base, fmtMoney(usdt), plan) + "\n\n" + t.planDisclaimer;
+    if (!live) { say(text); return doOpen(); }
+    const id = "act" + Date.now(); actions.current[id] = doOpen;
+    say(text + "\n\n" + t.chatConfirmLive, { action: { id, label: t.confirmBtn } });
+  };
+
+  const runAction = async (m) => {
+    const fn = actions.current[m.action.id]; if (!fn || busy) return;
+    delete actions.current[m.action.id];
+    setMsgs((all) => [...all.map((x) => (x.id === m.id ? { ...x, action: null } : x)), { id: "p" + Date.now(), me: false, pending: true, text: t.executing }]);
+    setBusy(true); await fn(); setBusy(false);
+  };
 
   const send = useCallback(async (text) => {
     const q = (text || "").trim();
     if (!q || busy) return;
     setInput(""); setBusy(true);
     setMsgs((m) => [...m, { id: "u" + Date.now(), me: true, text: q }, { id: "p" + Date.now(), me: false, pending: true, text: t.thinking }]);
+    if (/(trade|trad|ترايد|تريد|صفقة|buy|chri|شري|bi3|بيع|sell|\bsed|سد|close|achet|vend|khrej|خرج)/i.test(q)) {
+      let ti = null;
+      try { ti = await api("/intent", { method: "POST", body: JSON.stringify({ text: q }) }); } catch {}
+      if (ti && ti.intent) { await tradeCommand(ti); setBusy(false); return; }
+    }
     let reply;
     try { reply = (await api("/chat", { method: "POST", body: JSON.stringify({ text: q, lang }) })).reply; }
     catch (e) { reply = e.code === "rate_limited" ? t.rateLimited : t.error; }
     setMsgs((m) => [...m.filter((x) => !x.pending), { id: "b" + Date.now(), me: false, text: stripMd(reply) }]);
     setBusy(false);
-  }, [busy, lang, t]);
+  }, [busy, lang, t, okx, okxCfg, okxTrades]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { if (seed && seed.q) send(seed.q); }, [seed]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setTimeout(() => listRef.current && listRef.current.scrollToEnd({ animated: true }), 50); }, [msgs]);
@@ -634,6 +784,7 @@ function Chat({ t, rtl, lang, seed }) {
           <View style={[st.bubble, item.me ? st.me : st.bot, item.me ? (rtl ? st.left : st.right) : (rtl ? st.right : st.left)]}>
             {item.pending ? <View style={[st.row, { gap: 8 }]}><ActivityIndicator size="small" color={C.accent} /><Text style={st.sub}>{item.text}</Text></View>
               : <Text selectable style={[st.bubbleText, rtl && st.rtl]}>{item.text}</Text>}
+            {item.action ? <Pressable style={[st.btnSmall, { backgroundColor: C.green, marginTop: 8, alignSelf: rtl ? "flex-end" : "flex-start" }]} onPress={() => runAction(item)}><Text style={st.btnSmallText}>{item.action.label}</Text></Pressable> : null}
           </View>
         )}
         ListFooterComponent={msgs.length <= 1 ? (
@@ -1015,6 +1166,45 @@ function TradePlan({ t, rtl, lang, asset, base, isCrypto, okx, okxCreds, okxCfg,
   );
 }
 
+
+// ------------------------------------------------------------------ Real OKX wallet (live balance) + AI manager activity
+function OkxWallet({ t, rtl, okx, okxBal, refreshBal, okxTrades, okxEvents }) {
+  const [busy, setBusy] = useState(false);
+  const coins = okxBal ? Object.entries(okxBal.ccy).filter(([, v]) => v.eq > 0 && (v.usd >= 0.5 || v.eq >= 1)).sort((a, b) => b[1].usd - a[1].usd) : [];
+  const open = okxTrades.filter((x) => x.open && x.demo === okx.demo);
+  return (
+    <View style={{ marginBottom: 18 }}>
+      <View style={[st.row, rtl && st.rowRev, { justifyContent: "space-between", alignItems: "center", marginBottom: 6 }]}>
+        <Text style={[st.h1, { marginBottom: 0 }]}>{t.okxWallet}</Text>
+        <Pressable style={st.chip} onPress={async () => { setBusy(true); await refreshBal(); setBusy(false); }}><Text style={st.chipText}>{busy ? "…" : "↻ " + t.refresh}</Text></Pressable>
+      </View>
+      <View style={st.card}>
+        <Text style={[st.sub, rtl && st.rtl]}>{t.totalEquity} · {okx.demo ? t.demoMode : t.liveMode}</Text>
+        <Text style={{ color: C.text, fontSize: 30, fontWeight: "900", textAlign: rtl ? "right" : "left" }}>{okxBal ? "$" + fmtMoney(okxBal.totalUsd) : "…"}</Text>
+        {coins.length ? <Text style={[st.label, { marginTop: 10 }, rtl && st.rtl]}>{t.coins}</Text> : null}
+        {coins.map(([ccy, v]) => (
+          <View key={ccy} style={[st.row, rtl && st.rowRev, { justifyContent: "space-between", paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: C.line }]}>
+            <Text style={[st.body, { marginTop: 0, fontWeight: "800" }]}>{ccy}</Text>
+            <Text style={[st.body, { marginTop: 0 }]}>{fmtQty(v.eq)} · ${fmtMoney(v.usd)}</Text>
+          </View>
+        ))}
+        {open.length ? <Text style={[st.label, { marginTop: 12 }, rtl && st.rtl]}>{t.trades} ({open.length})</Text> : null}
+        {open.map((tr) => (
+          <Text key={tr.ts} style={[st.sub, { marginTop: 4 }, rtl && st.rtl]}>{tr.instId} · {fmtQty(tr.qty || 0)} @ {tr.fill ? fmtPrice(tr.fill.avgPx) : "—"}{tr.sl ? ` · SL ${tr.sl} · TP ${tr.tp}` : ""}</Text>
+        ))}
+      </View>
+      <Text style={[st.label, { marginTop: 12 }, rtl && st.rtl]}>{t.managerTitle}</Text>
+      <View style={st.card}>
+        <Text style={[st.sub, { fontSize: 12 }, rtl && st.rtl]}>{t.managerDesc}</Text>
+        <Text style={[st.label, { marginTop: 10 }, rtl && st.rtl]}>{t.events}</Text>
+        {okxEvents.length ? okxEvents.slice(0, 8).map((e) => (
+          <Text key={e.ts} style={[st.body, { marginTop: 4, fontSize: 13 }, rtl && st.rtl]}>{fmtTime(new Date(e.ts).toISOString())} · {e.text}</Text>
+        )) : <Text style={[st.sub, rtl && st.rtl]}>{t.noEvents}</Text>}
+      </View>
+    </View>
+  );
+}
+
 // Simple dependency-light line chart (react-native-svg)
 function LineChart({ points, up, range }) {
   const [w, setW] = useState(0);
@@ -1101,7 +1291,7 @@ async function runPaperBot(p, t) {
   return paper;
 }
 
-function Portfolio({ t, rtl, paper, setPaper }) {
+function Portfolio({ t, rtl, paper, setPaper, okxProps }) {
   const [quotes, setQuotes] = useState({});
   const [refreshing, setRefreshing] = useState(false);
   const [capInput, setCapInput] = useState(String(paper.startCap));
@@ -1124,6 +1314,7 @@ function Portfolio({ t, rtl, paper, setPaper }) {
   return (
     <ScrollView contentContainerStyle={{ padding: 14, paddingBottom: 40 }} keyboardShouldPersistTaps="handled"
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={C.accent} />}>
+      {okxProps.okx ? <OkxWallet t={t} rtl={rtl} {...okxProps} /> : null}
       <Text style={[st.h1, { marginBottom: 4 }, rtl && st.rtl]}>{t.pfTitle}</Text>
       <Text style={[st.sub, { marginBottom: 12 }, rtl && st.rtl]}>{t.pfNote}</Text>
       <View style={[st.card, st.row, rtl && st.rowRev, { justifyContent: "space-around" }]}>
