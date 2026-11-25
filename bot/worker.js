@@ -89,6 +89,14 @@ export async function api(request, url, env) {
       if (!text) return json({ error: "empty" }, 400);
       return json({ reply: await answer(text, env, lang) });
     }
+    if (url.pathname === "/api/plan" && request.method === "POST") {
+      if (limited(ip)) return json({ error: "rate_limited" }, 429);
+      const b = await request.json().catch(() => ({}));
+      const lang = LANGS.includes(b.lang) ? b.lang : "darija";
+      const sym = String(b.symbol || "").toUpperCase().trim();
+      if (!/^[\^A-Z0-9.=\-]{1,20}$/.test(sym)) return json({ error: "bad_symbol" }, 400);
+      return json({ plan: await tradePlan({ symbol: sym, name: String(b.name || sym).slice(0, 60), cgId: b.cgId || undefined, type: b.type }, env, lang) });
+    }
     if (url.pathname === "/api/search") {
       return json({ results: await searchAssets(url.searchParams.get("q") || "") });
     }
@@ -141,6 +149,54 @@ const HELP = {
   fr: "Envoie le nom d'une action ou d'une crypto (ex. : Nvidia, BTC, « Tesla, c'est le moment ? ») et je te donne une analyse.",
   en: "Send me a stock or crypto name (e.g. Nvidia, BTC, \"is Tesla a buy now?\") and I'll give you an analysis.",
 };
+
+// ---------------------------------------------------------------- AI trade plan (user must confirm before anything is executed)
+const PLAN_SYSTEM = `You are a disciplined crypto/stock swing-trading assistant. The user may execute your plan on their own exchange account after reading it, so be conservative and honest.
+You get DATA: live price + indicators (SMA20, SMA50, RSI14, 20-day support/resistance, 6-month range, % changes), coin stats and recent headlines.
+Decide "buy" (spot long, no leverage) or "wait". Choose "wait" when the setup is unclear, the trend is strongly down without confirmation, news risk is high, or the risk/reward is poor. Never force a trade.
+If "buy": entry = current price from DATA; stopLoss below a meaningful level (e.g. under support), between 1% and 15% under entry; takeProfit at a realistic level (e.g. near resistance) with reward/risk >= 1.5.
+Use ONLY facts from DATA. Return ONLY JSON:
+{"action":"buy"|"wait","entry":number,"stopLoss":number,"takeProfit":number,"timeframe":"hours"|"days"|"weeks","confidence":"low"|"medium"|"high",
+ "summary":"2-3 sentences","reasons":["short","short"],"risks":["short","short"]}`;
+const PLAN_LANG = { darija: "Write summary, reasons and risks in Moroccan Darija (Arabic script), tickers/technical terms in Latin letters.", ar: "Write summary, reasons and risks in Modern Standard Arabic.", fr: "Write summary, reasons and risks in French.", en: "Write summary, reasons and risks in English." };
+const PLAN_MSG = {
+  darija: { bad: "الخطة ديال الذكاء الاصطناعي ما دازتش التحقق ديال المخاطر (stop-loss ولا take-profit ماشي منطقيين)، فاحسن نتسناو.", busy: "الذكاء الاصطناعي مشغول دابا، عاود من بعد شوية.", noPrice: "ما لقيتش الثمن ديال هاد الأصل." },
+  ar: { bad: "لم تجتز خطة الذكاء الاصطناعي فحص المخاطر (وقف الخسارة أو جني الأرباح غير منطقي)، الأفضل الانتظار.", busy: "الذكاء الاصطناعي مشغول الآن، حاول بعد قليل.", noPrice: "لم أجد سعر هذا الأصل." },
+  fr: { bad: "Le plan de l'IA n'a pas passé le contrôle de risque (stop-loss ou take-profit incohérent) : mieux vaut attendre.", busy: "L'IA est surchargée, réessaie dans un instant.", noPrice: "Prix introuvable pour cet actif." },
+  en: { bad: "The AI plan failed the risk check (stop-loss or take-profit not sensible), so it's better to wait.", busy: "The AI is busy right now, please try again shortly.", noPrice: "Couldn't find a price for this asset." },
+};
+
+export function validatePlan(p, price) {
+  const out = { ...p };
+  const n = v => (typeof v === "number" ? v : parseFloat(v));
+  out.entry = price; out.stopLoss = n(p.stopLoss); out.takeProfit = n(p.takeProfit);
+  out.reasons = (Array.isArray(p.reasons) ? p.reasons : []).slice(0, 4).map(String);
+  out.risks = (Array.isArray(p.risks) ? p.risks : []).slice(0, 4).map(String);
+  if (p.action !== "buy") return { ...out, action: "wait" };
+  const slPct = (price - out.stopLoss) / price * 100, tpPct = (out.takeProfit - price) / price * 100;
+  const rr = tpPct / slPct;
+  if (!(slPct >= 0.8 && slPct <= 15 && tpPct > 0 && rr >= 1.4)) return { ...out, action: "wait", rejected: true, slPct, tpPct };
+  return { ...out, action: "buy", stopLoss: nice(out.stopLoss), takeProfit: nice(out.takeProfit), slPct: +slPct.toFixed(2), tpPct: +tpPct.toFixed(2), rr: +rr.toFixed(2) };
+}
+
+export async function tradePlan(asset, env, lang = "darija") {
+  const M = PLAN_MSG[lang] || PLAN_MSG.darija;
+  const deadline = Date.now() + BUDGET_MS;
+  const d = await gather(asset);
+  const price = d.price && d.price.last;
+  if (!price) return { action: "wait", summary: M.noPrice, symbol: asset.symbol };
+  const sys = PLAN_SYSTEM + "\n" + (PLAN_LANG[lang] || PLAN_LANG.darija);
+  const user = "DATA:\n" + JSON.stringify(d, null, 1);
+  let raw;
+  try { raw = extractJSON(await gemini(env, sys, user, true, 700, env.AI ? Math.min(deadline - 12000, Date.now() + 9000) : deadline - 1500)); }
+  catch (e) {
+    try { raw = extractJSON(await workersAI(env, sys, user, deadline - 500)); }
+    catch (e2) { return { action: "wait", summary: M.busy, symbol: asset.symbol, price, error: "ai_busy" }; }
+  }
+  const v = validatePlan(raw || {}, price);
+  if (v.rejected) v.summary = M.bad + (v.summary ? "\n\n" + v.summary : "");
+  return { ...v, symbol: asset.symbol, name: asset.name, price, currency: (d.price && d.price.currency) || "USD", indicators: { sma20: d.price.sma20, sma50: d.price.sma50, rsi14: d.price.rsi14, support20: d.price.support20, resistance20: d.price.resistance20 } };
+}
 
 // ---------------------------------------------------------------- webhook filtering
 export function parseWebhook(b, env) {

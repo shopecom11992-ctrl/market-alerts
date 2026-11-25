@@ -1,5 +1,5 @@
 // Offline tests for the WhatsApp Q&A worker: Gemini (+Google Search), Yahoo, CoinGecko, Google News and Green-API are mocked.
-import worker, { parseWebhook, summarize, localSymbols, resolveAsset, rankModels, candidateWords, nice, searchAssets, chartData } from "./worker.js";
+import worker, { parseWebhook, summarize, localSymbols, resolveAsset, rankModels, candidateWords, nice, searchAssets, chartData, validatePlan } from "./worker.js";
 import assert from "node:assert/strict";
 
 const env = { GEMINI_API_KEY: "g", GREENAPI_TOKEN: "t", GREENAPI_URL: "https://7107.api.greenapi.com",
@@ -39,6 +39,9 @@ globalThis.fetch = async (url, opt = {}) => {
         : /rivian/i.test(q) ? { type: "asset", queries: ["Rivian"] }
         : { type: "asset", queries: ["zzzz unknown"] };
       return Response.json({ candidates: [{ content: { parts: [{ text: JSON.stringify(out) }] } }] });
+    }
+    if (sys.startsWith("You are a disciplined")) {
+      return Response.json({ candidates: [{ content: { parts: [{ text: JSON.stringify({ action: "buy", entry: 1, stopLoss: 152, takeProfit: 175, timeframe: "days", confidence: "medium", summary: "خطة", reasons: ["a"], risks: ["b"] }) }] } }] });
     }
     if (b.tools) { // grounded analysis
       assert.deepEqual(b.tools, [{ google_search: {} }]);
@@ -209,6 +212,15 @@ const ch = await chartData("PEPE-USD", "1mo", "pepe");
 ok(ch.src === "CoinGecko" && ch.points.length > 1, "chart falls back to CoinGecko for coins Yahoo doesn't list");
 r = await apiCall("/api/chart?symbol=" + encodeURIComponent("<script>"));
 ok(r.status === 400, "chart rejects bad symbols");
+// --- trade plan
+r = await apiCall("/api/plan", { method: "POST", body: JSON.stringify({ symbol: "NVDA", name: "Nvidia", lang: "darija" }) });
+ok(r.body.plan.action === "buy" && r.body.plan.entry === 160 && r.body.plan.rr >= 1.4 && r.body.plan.slPct === 5, "POST /api/plan returns a validated buy plan (entry = live price, SL 5%, R:R checked)");
+ok(validatePlan({ action: "buy", stopLoss: 159.9, takeProfit: 200 }, 160).action === "wait", "plan rejected: stop-loss too tight");
+ok(validatePlan({ action: "buy", stopLoss: 100, takeProfit: 300 }, 160).action === "wait", "plan rejected: stop-loss too far (>15%)");
+ok(validatePlan({ action: "buy", stopLoss: 150, takeProfit: 165 }, 160).action === "wait", "plan rejected: reward/risk below 1.4");
+ok(validatePlan({ action: "wait" }, 160).action === "wait", "AI 'wait' stays wait");
+r = await apiCall("/api/plan", { method: "POST", body: JSON.stringify({ symbol: "<x>" }) });
+ok(r.status === 400, "plan rejects bad symbols");
 r = await apiCall("/api/nope");
 ok(r.status === 404, "unknown API path -> 404");
 const opt = await worker.fetch(new Request("https://x.workers.dev/api/chat", { method: "OPTIONS" }), env, { waitUntil() {} });
