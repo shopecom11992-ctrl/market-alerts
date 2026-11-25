@@ -236,7 +236,7 @@ export async function tradeIntent(text) {
 // ---------------------------------------------------------------- AI position manager (only tightens risk or exits; never adds risk)
 const MANAGE_SYSTEM = `You manage an OPEN spot long position for a user. You get DATA (live price, indicators, headlines) and POSITION (entry, current stopLoss, takeProfit).
 Choose ONE: "hold" (keep as is), "tighten" (raise the stop-loss to protect profit or cut risk), or "close" (exit now at market: setup broken, trend reversed, or strongly negative news).
-Rules: never lower the stop-loss; a new stop-loss must be above the current one and at least 0.7% below the current price. Prefer "hold" when nothing important changed. Use ONLY facts from DATA.
+Rules: never lower the stop-loss; a new stop-loss must be above the current one and at least 1.5% below the current price (give normal volatility room). Prefer "hold" when nothing important changed. Use ONLY facts from DATA.
 Return ONLY JSON: {"action":"hold"|"tighten"|"close","newStopLoss":number|null,"reason":"1-2 sentences"}`;
 
 export function validateManage(r, pos, price) {
@@ -245,7 +245,7 @@ export function validateManage(r, pos, price) {
   if (r.action === "close") return { action: "close", reason, price };
   if (r.action === "tighten") {
     const ns = parseFloat(r.newStopLoss);
-    if (isFinite(ns) && ns > pos.stopLoss && ns <= price * 0.993 && ns < pos.takeProfit) return { action: "tighten", newStopLoss: nice(ns), reason, price };
+    if (isFinite(ns) && ns > pos.stopLoss && ns <= price * 0.985 && ns < pos.takeProfit) return { action: "tighten", newStopLoss: nice(ns), reason, price };
   }
   return { action: "hold", reason, price };
 }
