@@ -347,6 +347,9 @@ export async function agent(text, history, ctx, env, lang = "darija") {
   const sys = AGENT_SYSTEM + "\n" + (AGENT_LANG[lang] || AGENT_LANG.darija);
   const hist = history.map((h) => (h.me ? "USER: " : "KIM: ") + String(h.text || "").slice(0, 300)).join("\n");
   const user = `CONTEXT: ${JSON.stringify(ctx).slice(0, 1500)}\n\nCONVERSATION SO FAR:\n${hist || "(none)"}\n\nUSER NOW: ${text}`;
+  // Speed: if the message names a known coin/stock, start fetching its data while the AI is still reading the message.
+  const loc = localSymbols(text);
+  const pre = loc ? Promise.all(loc.symbols.slice(0, 2).filter((s0) => loc.alias[s0]).map((s0) => gather({ symbol: s0, name: loc.names[s0], type: loc.types[s0] }))).catch(() => null) : null;
   let j = null;
   try { j = extractJSON(await gemini(env, sys, user, true, 600, Math.min(deadline - 12000, Date.now() + 9000))); }
   catch (e) { try { j = extractJSON(await workersAI(env, sys, user, Math.min(deadline - 9000, Date.now() + 8000))); } catch (e2) { j = null; } }
@@ -357,7 +360,10 @@ export async function agent(text, history, ctx, env, lang = "darija") {
   }
   const action = cleanAction(j.action);
   let reply = noHebrew(j.reply).slice(0, 1500);
-  if (action.type === "analyze") reply = await answer(action.query || text, env, lang);
+  if (action.type === "analyze") {
+    const data = pre ? await pre : null;
+    reply = data && data.length ? await analyse(text, data, env, Date.now() + BUDGET_MS, lang) : await answer(action.query || text, env, lang);
+  }
   const asset = (action.type === "open" || action.type === "close") ? await assetFor(action.symbol) : null;
   return { reply, action, asset };
 }
