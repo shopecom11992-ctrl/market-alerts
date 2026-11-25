@@ -404,6 +404,30 @@ def gemini(model, system, user, max_tokens=2000):
         raise LLMError(f"Gemini HTTP {st}: {resp[:300]!r}")
 
 
+_MODELS = None
+
+
+def available_gemini_models():
+    """Ask Google which Flash/Flash-Lite models this key can use (names get retired over time)."""
+    global _MODELS
+    if _MODELS is not None:
+        return _MODELS
+    _MODELS = []
+    key = os.environ.get("GEMINI_API_KEY")
+    if key:
+        st, body = http("https://generativelanguage.googleapis.com/v1beta/models?pageSize=200",
+                        headers={"x-goog-api-key": key}, timeout=10)
+        if st == 200:
+            names = [m["name"].split("/")[-1] for m in json.loads(body).get("models", [])
+                     if "generateContent" in m.get("supportedGenerationMethods", [])]
+            ok = [n for n in names if re.fullmatch(r"gemini-\d+(\.\d+)?-flash(-lite)?(-latest)?", n)
+                  and float(re.match(r"gemini-(\d+(?:\.\d+)?)", n).group(1)) >= 3]
+            ver = lambda n: float(re.match(r"gemini-(\d+(?:\.\d+)?)", n).group(1))
+            _MODELS = sorted(ok, key=lambda n: ("-lite" not in n, -ver(n)))[:4]
+            log("gemini models available:", ", ".join(_MODELS))
+    return _MODELS
+
+
 def provider(cfg):
     p = cfg.get("provider", "auto")
     if p == "auto":
@@ -416,7 +440,7 @@ def llm(cfg, role, system, user, max_tokens):
     if provider(cfg) == "gemini":
         first = cfg["gemini_triage_model"] if role == "triage" else cfg["gemini_analysis_model"]
         second = cfg["gemini_analysis_model"] if role == "triage" else cfg["gemini_triage_model"]
-        chain = list(dict.fromkeys([first, second] + cfg.get("gemini_fallback_models", [])))
+        chain = list(dict.fromkeys([first, second] + available_gemini_models() + cfg.get("gemini_fallback_models", [])))
         last = None
         for model in chain:
             try:
