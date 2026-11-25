@@ -1,12 +1,12 @@
 // Offline tests for the WhatsApp Q&A worker: Gemini (+Google Search), Yahoo, CoinGecko, Google News and Green-API are mocked.
-import worker, { parseWebhook, summarize, localSymbols, resolveAsset, rankModels, candidateWords } from "./worker.js";
+import worker, { parseWebhook, summarize, localSymbols, resolveAsset, rankModels, candidateWords, nice } from "./worker.js";
 import assert from "node:assert/strict";
 
 const env = { GEMINI_API_KEY: "g", GREENAPI_TOKEN: "t", GREENAPI_URL: "https://7107.api.greenapi.com",
               GREENAPI_INSTANCE: "710700000000", CHAT_ID: "212600000000" };
 const sent = [];
 const calls = [];
-let yahooOk = true, geminiHang = false, searchOk = true, firstLite503 = false, intentDown = false;
+let yahooOk = true, geminiHang = false, searchOk = true, firstLite503 = false, intentDown = false, all503 = false;
 const closes = Array.from({ length: 120 }, (_, i) => 100 + i * 0.5);
 
 const YQ = { // Yahoo search: query -> quotes
@@ -26,6 +26,7 @@ globalThis.fetch = async (url, opt = {}) => {
     const b = JSON.parse(opt.body);
     const sys = b.systemInstruction.parts[0].text;
     if (geminiHang) return new Promise((_, rej) => opt.signal.addEventListener("abort", () => rej(Object.assign(new Error("timeout"), { name: "TimeoutError" }))));
+    if (all503) return new Response('{"error":{"code":503,"message":"high demand"}}', { status: 503 });
     if (url.includes("2.5") && !b.tools) assert.equal(b.generationConfig.thinkingConfig.thinkingBudget, 0);
     if (sys.startsWith("You route")) {
       if (intentDown) return new Response("busy", { status: 503 });
@@ -146,6 +147,20 @@ searchOk = false; env.GOOGLE_SEARCH = "1";
 m = await ask("bitcoin");
 ok(m[1].includes("تحليل بلا بحث"), "search unavailable -> falls back to analysis without search");
 searchOk = true; delete env.GOOGLE_SEARCH;
+
+// --- every Gemini model overloaded (503) -> Cloudflare Workers AI writes the analysis
+all503 = true;
+env.AI = { run: async (model, inp) => { assert.ok(model.includes("llama") && inp.messages[0].role === "system"); return { response: "🤖 *تحليل Llama*\nℹ️ هادا تحليل ماشي نصيحة شراء ولا بيع — القرار ديالك." }; } };
+const t1 = Date.now();
+m = await ask("nvidia");
+ok(m[1].includes("تحليل Llama") && Date.now() - t1 < 27000, `Gemini 503 everywhere -> Workers AI answer in ${Math.round((Date.now() - t1) / 1000)}s`);
+env.AI = { run: async () => { throw new Error("neurons exhausted"); } };
+m = await ask("nvidia");
+ok(m[1].includes("support"), "Gemini + Workers AI both down -> raw numbers");
+delete env.AI; all503 = false;
+
+// --- number formatting
+ok(nice(10.284000396728516) === 10.28 && nice(0.0000160123) === 0.00001601 && nice(57.6) === 57.6, "prices rounded (10.28, tiny coins keep 4 significant digits)");
 
 // --- Yahoo down -> Stooq fallback still answers
 yahooOk = false;

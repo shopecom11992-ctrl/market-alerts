@@ -38,7 +38,7 @@ async function models(env) {
     if (r.ok) {
       const list = ((await r.json()).models || []).filter(m => (m.supportedGenerationMethods || []).includes("generateContent")).map(m => m.name);
       const ranked = rankModels(list);
-      if (ranked.length) { MODEL_CACHE = ranked.slice(0, 4); MODEL_CACHE_AT = Date.now(); console.log("models:", MODEL_CACHE.join(", ")); return MODEL_CACHE; }
+      if (ranked.length) { MODEL_CACHE = ranked.slice(0, 6); MODEL_CACHE_AT = Date.now(); console.log("models:", MODEL_CACHE.join(", ")); return MODEL_CACHE; }
     }
   } catch (e) { console.log("model list error", e && e.message); }
   return FALLBACK_MODELS;
@@ -89,7 +89,7 @@ async function handle(msg, env) {
   }
   const assets = intent.assets.slice(0, 2);
   const [, data] = await Promise.all([
-    send(env, msg.chat, `🤖 كنجمع المعلومات على ${assets.map(a => a.name || a.symbol).join(" و ")} (الثمن، الأخبار، Google)...`),
+    send(env, msg.chat, `🤖 كنجمع المعلومات على ${assets.map(a => (a.name || a.symbol).replace(/ USD$/, "")).join(" و ")} (الثمن، المؤشرات، الأخبار من بزاف ديال المصادر)...`),
     Promise.all(assets.map(gather)),
   ]);
   const answer = await analyse(msg.text, data, env, deadline);
@@ -116,34 +116,55 @@ async function gather(a) {
 // ---------------------------------------------------------------- Gemini
 async function gemini(env, system, user, json = true, maxTokens = 2048, deadline = Date.now() + 20000) {
   let last;
-  for (const model of await models(env)) {
-    const left = deadline - Date.now();
-    if (left < 2500) break;
-    const gc = { maxOutputTokens: maxTokens, temperature: 0.3 };
-    if (json) gc.responseMimeType = "application/json";
-    if (NO_THINK[model]) gc.thinkingConfig = { thinkingBudget: 0 };
-    try {
-      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
-        body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] },
-                               contents: [{ role: "user", parts: [{ text: user }] }], generationConfig: gc }),
-        signal: AbortSignal.timeout(Math.min(json ? 6000 : 12000, left - 500)),
-      });
-      if (r.ok) {
-        const j = await r.json();
-        const parts = (((j.candidates || [])[0] || {}).content || {}).parts || [];
-        const t = parts.filter(p => !p.thought).map(p => p.text || "").join("");
-        if (t.trim()) return t;
-        last = model + " empty";
-      } else {
-        last = `${model} HTTP ${r.status} ${(await r.text()).slice(0, 120)}`;
-        if (r.status === 404 && MODEL_CACHE) MODEL_CACHE = MODEL_CACHE.filter(m => m !== model);
+  const list = await models(env);
+  for (let round = 0; round < 4; round++) {           // free tier often answers 503 "high demand" for a few seconds
+    for (const model of list) {
+      const left = deadline - Date.now();
+      if (left < 2500) throw new Error("Gemini failed: " + last);
+      const gc = { maxOutputTokens: maxTokens, temperature: 0.3 };
+      if (json) gc.responseMimeType = "application/json";
+      if (NO_THINK[model]) gc.thinkingConfig = { thinkingBudget: 0 };
+      try {
+        const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
+          body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] },
+                                 contents: [{ role: "user", parts: [{ text: user }] }], generationConfig: gc }),
+          signal: AbortSignal.timeout(Math.min(json ? 6000 : 12000, left - 500)),
+        });
+        if (r.ok) {
+          const j = await r.json();
+          const parts = (((j.candidates || [])[0] || {}).content || {}).parts || [];
+          const t = parts.filter(p => !p.thought).map(p => p.text || "").join("");
+          if (t.trim()) return t;
+          last = model + " empty";
+        } else {
+          last = `${model} HTTP ${r.status} ${(await r.text()).slice(0, 120)}`;
+          if (r.status === 404 && MODEL_CACHE) MODEL_CACHE = MODEL_CACHE.filter(m => m !== model);
+          if (r.status === 400 || r.status === 403) throw new Error("Gemini failed: " + last); // bad key / request: retrying won't help
+        }
+      } catch (e) {
+        if (String(e.message || "").startsWith("Gemini failed")) throw e;
+        last = `${model} ${e.name || e}`;
       }
-    } catch (e) { last = `${model} ${e.name || e}`; }
-    console.log("gemini fallback:", last);
+      console.log("gemini fallback:", last);
+    }
+    await new Promise(r => setTimeout(r, 1200 * (round + 1)));
   }
   throw new Error("Gemini failed: " + last);
+}
+
+// Second brain: Cloudflare Workers AI (free daily allowance), used when Gemini is overloaded.
+const CF_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+async function workersAI(env, system, user, deadline) {
+  if (!env.AI) throw new Error("Workers AI binding not configured");
+  const left = deadline - Date.now();
+  if (left < 3000) throw new Error("no time left for Workers AI");
+  const run = env.AI.run(CF_MODEL, { messages: [{ role: "system", content: system }, { role: "user", content: user }], max_tokens: 900, temperature: 0.3 });
+  const out = await Promise.race([run, new Promise((_, rej) => setTimeout(() => rej(new Error("Workers AI timeout")), left - 500))]);
+  const t = (out && (out.response || (out.result && out.result.response))) || "";
+  if (!String(t).trim()) throw new Error("Workers AI empty");
+  return String(t);
 }
 
 // Gemini + live Google Search (free tier: 2.5 Flash / Flash-Lite). Returns {text, sources}.
@@ -301,7 +322,11 @@ async function analyse(question, data, env, deadline = Date.now() + 20000) {
       t = g.text; sources = g.sources;
     } catch (e) {
       console.log("no search, plain analysis:", e && e.message);
-      t = await gemini(env, ANALYSIS_SYSTEM, user, false, 900, deadline - 1500);
+      try { t = await gemini(env, ANALYSIS_SYSTEM, user, false, 900, deadline - (env.AI ? 9000 : 1500)); }
+      catch (e2) {
+        console.log("gemini busy -> Workers AI:", e2 && e2.message);
+        t = await workersAI(env, ANALYSIS_SYSTEM, user, deadline - 1000);
+      }
     }
     t = t.trim();
     if (!sources.length) sources = [...new Set(data.flatMap(d => [d.price && !d.price.error ? d.price.src : null, d.coin ? "CoinGecko" : null, ...(d.news || []).map(n => n.source)]))].filter(Boolean).slice(0, 6);
@@ -327,17 +352,24 @@ export function summarize(symbol, closes, highs, lows, meta = {}) {
   if (c.length < 5) return { symbol, error: "not enough price data" };
   const last = meta.price ?? c[c.length - 1];
   const pct = n => c.length > n ? +(((last / c[c.length - 1 - n]) - 1) * 100).toFixed(2) : null;
-  const sma = n => c.length >= n ? +(c.slice(-n).reduce((a, b) => a + b, 0) / n).toFixed(4) : null;
+  const sma = n => c.length >= n ? nice(c.slice(-n).reduce((a, b) => a + b, 0) / n) : null;
   const h = highs.filter(x => typeof x === "number"), l = lows.filter(x => typeof x === "number");
   const r14 = rsi(c, 14);
   return {
-    symbol, currency: meta.currency || null, last: +(+last).toFixed(4),
+    symbol, currency: meta.currency || null, last: nice(+last),
     chg1d: pct(1), chg5d: pct(5), chg1m: pct(21), chg3m: pct(63),
     sma20: sma(20), sma50: sma(50), rsi14: r14,
-    support20: l.length ? Math.min(...l.slice(-20)) : null, resistance20: h.length ? Math.max(...h.slice(-20)) : null,
-    low6m: l.length ? Math.min(...l) : null, high6m: h.length ? Math.max(...h) : null,
+    support20: l.length ? nice(Math.min(...l.slice(-20))) : null, resistance20: h.length ? nice(Math.max(...h.slice(-20))) : null,
+    low6m: l.length ? nice(Math.min(...l)) : null, high6m: h.length ? nice(Math.max(...h)) : null,
     asOf: meta.asOf || null,
   };
+}
+
+// 2 decimals for normal prices, more significant digits for tiny coins (0.00001234)
+export function nice(x) {
+  if (typeof x !== "number" || !isFinite(x)) return null;
+  const a = Math.abs(x);
+  return a >= 1 ? +x.toFixed(2) : a === 0 ? 0 : +x.toPrecision(4);
 }
 
 function rsi(c, n) {
