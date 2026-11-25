@@ -185,7 +185,7 @@ If "buy": entry = current price from DATA; stopLoss below a meaningful level (e.
 Use ONLY facts from DATA. Return ONLY JSON:
 {"action":"buy"|"wait","entry":number,"stopLoss":number,"takeProfit":number,"timeframe":"hours"|"days"|"weeks","confidence":"low"|"medium"|"high",
  "summary":"2-3 sentences","reasons":["short","short"],"risks":["short","short"]}`;
-const PLAN_LANG = { darija: "Write summary, reasons and risks in Moroccan Darija (Arabic script), tickers/technical terms in Latin letters.", ar: "Write summary, reasons and risks in Modern Standard Arabic.", fr: "Write summary, reasons and risks in French.", en: "Write summary, reasons and risks in English." };
+const PLAN_LANG = { darija: "Write summary, reasons and risks in Moroccan Darija (Arabic script only — never Hebrew or other scripts), tickers/technical terms in Latin letters.", ar: "Write summary, reasons and risks in Modern Standard Arabic.", fr: "Write summary, reasons and risks in French.", en: "Write summary, reasons and risks in English." };
 const PLAN_MSG = {
   darija: { bad: "الخطة ديال الذكاء الاصطناعي ما دازتش التحقق ديال المخاطر (stop-loss ولا take-profit ماشي منطقيين)، فاحسن نتسناو.", busy: "الذكاء الاصطناعي مشغول دابا، عاود من بعد شوية.", noPrice: "ما لقيتش الثمن ديال هاد الأصل." },
   ar: { bad: "لم تجتز خطة الذكاء الاصطناعي فحص المخاطر (وقف الخسارة أو جني الأرباح غير منطقي)، الأفضل الانتظار.", busy: "الذكاء الاصطناعي مشغول الآن، حاول بعد قليل.", noPrice: "لم أجد سعر هذا الأصل." },
@@ -193,12 +193,13 @@ const PLAN_MSG = {
   en: { bad: "The AI plan failed the risk check (stop-loss or take-profit not sensible), so it's better to wait.", busy: "The AI is busy right now, please try again shortly.", noPrice: "Couldn't find a price for this asset." },
 };
 
+export const noHebrew = (x) => String(x || "").replace(/[\u0590-\u05FF]+/g, "").replace(/ {2,}/g, " ");
 export function validatePlan(p, price) {
-  const out = { ...p };
+  const out = { ...p, summary: noHebrew(p.summary) };
   const n = v => (typeof v === "number" ? v : parseFloat(v));
   out.entry = price; out.stopLoss = n(p.stopLoss); out.takeProfit = n(p.takeProfit);
-  out.reasons = (Array.isArray(p.reasons) ? p.reasons : []).slice(0, 4).map(String);
-  out.risks = (Array.isArray(p.risks) ? p.risks : []).slice(0, 4).map(String);
+  out.reasons = (Array.isArray(p.reasons) ? p.reasons : []).slice(0, 4).map(noHebrew);
+  out.risks = (Array.isArray(p.risks) ? p.risks : []).slice(0, 4).map(noHebrew);
   if (p.action !== "buy") return { ...out, action: "wait" };
   const slPct = (price - out.stopLoss) / price * 100, tpPct = (out.takeProfit - price) / price * 100;
   const rr = tpPct / slPct;
@@ -292,7 +293,7 @@ Action meanings:
 - "none": greetings, small talk, questions about you/the app, status questions ("chhal rba7t?", "fin wsalti?") — answer them from CONTEXT.
 Rules for "reply": write like a friendly Moroccan talking (Darija in Arabic script, short, warm, clear; tickers in Latin letters). Never promise profits. If the user asks for a big/fast target (e.g. 20% in a week), accept the mission but say honestly it is ambitious, that you will not take crazy risks to force it, that every trade has a stop-loss, and that you stop if losses reach maxLossPct. If not connected to OKX and the action needs trading, tell them to connect OKX in Settings. Keep it under 90 words unless the user asks for detail.`;
 
-const AGENT_LANG = { darija: "Write \"reply\" in Moroccan Darija (Arabic script).", ar: "Write \"reply\" in Modern Standard Arabic.", fr: "Write \"reply\" in French.", en: "Write \"reply\" in English." };
+const AGENT_LANG = { darija: "Write \"reply\" in Moroccan Darija (Arabic script only — never Hebrew or other scripts).", ar: "Write \"reply\" in Modern Standard Arabic.", fr: "Write \"reply\" in French.", en: "Write \"reply\" in English." };
 const ACTIONS = ["none", "analyze", "scan", "open", "close", "close_all", "start_mission", "stop_mission"];
 
 export function cleanAction(a) {
@@ -325,7 +326,7 @@ export async function agent(text, history, ctx, env, lang = "darija") {
     return { reply: await answer(text, env, lang), action: { type: "analyze" } };
   }
   const action = cleanAction(j.action);
-  let reply = String(j.reply || "").slice(0, 1500);
+  let reply = noHebrew(j.reply).slice(0, 1500);
   if (action.type === "analyze") reply = await answer(action.query || text, env, lang);
   const asset = (action.type === "open" || action.type === "close") ? await assetFor(action.symbol) : null;
   return { reply, action, asset };
@@ -353,7 +354,7 @@ export async function pickCoin(cands, goal, env, lang = "darija") {
   if (!c) return { pick: null, summary: String((raw && raw.summary) || ""), reasons: raw && raw.reasons, risks: raw && raw.risks };
   const v = validatePlan({ ...raw, action: "buy" }, c.last);
   if (v.action !== "buy") return { pick: null, rejected: c.instId, summary: (PLAN_MSG[lang] || PLAN_MSG.darija).bad };
-  return { pick: c.instId, entry: c.last, stopLoss: v.stopLoss, takeProfit: v.takeProfit, slPct: v.slPct, tpPct: v.tpPct, rr: v.rr, timeframe: raw.timeframe, confidence: raw.confidence, summary: String(raw.summary || ""), reasons: v.reasons, risks: v.risks };
+  return { pick: c.instId, entry: c.last, stopLoss: v.stopLoss, takeProfit: v.takeProfit, slPct: v.slPct, tpPct: v.tpPct, rr: v.rr, timeframe: raw.timeframe, confidence: raw.confidence, summary: noHebrew(raw.summary), reasons: v.reasons, risks: v.risks };
 }
 
 // ---------------------------------------------------------------- webhook filtering
