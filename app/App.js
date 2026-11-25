@@ -10,7 +10,7 @@ import { Ionicons } from "@expo/vector-icons";
 import Svg, { Defs, Line, LinearGradient, Path, Stop, Text as SvgText } from "react-native-svg";
 import * as SecureStore from "expo-secure-store";
 import { LANGS, isRTL, strings } from "./i18n";
-import { createOkx, executePlan, closeTrade, replaceStop, isGone } from "./okx";
+import { createOkx, executePlan, closeTrade, replaceStop, isGone, scanMarket } from "./okx";
 
 const API = "https://market-qa-bot.shopecom11992.workers.dev/api";
 const HDR = { "Content-Type": "application/json", "X-App": "kimmarket" };
@@ -60,11 +60,83 @@ export default function App() {
   const [okxEvents, setOkxEventsState] = useState([]);
   const addEvent = (text) => setOkxEventsState((prev) => { const n = [{ ts: Date.now(), text }, ...prev].slice(0, 40); store.set("okxEvents", n); return n; });
   const refreshBal = useCallback(async () => { if (!okx) { setOkxBal(null); return null; } try { const b = await okx.balances(); setOkxBal(b); return b; } catch { return null; } }, [okx]);
-  const okxProps = { okx, okxCreds, setOkxCreds, okxCfg, setOkxCfg, okxTrades, setOkxTrades, okxBal, refreshBal, okxEvents, addEvent };
-
-  // Live OKX balance (every 60 s) + AI trade manager (every 5 min) while the app is open.
   const tradesRef = useRef(okxTrades); tradesRef.current = okxTrades;
   const langRef = useRef(lang); langRef.current = lang;
+  const [mission, setMissionState] = useState(null);
+  const missionRef = useRef(mission); missionRef.current = mission;
+  const setMission = (m) => { missionRef.current = m; setMissionState(m); store.set("mission", m); };
+
+  // Buy with a validated plan, store the trade (OCO protects it on OKX).
+  const openPosition = async (base, symbol, plan, usdt, extra = {}) => {
+    const log = await executePlan(okx, { base, usdt, takeProfit: plan.takeProfit, stopLoss: plan.stopLoss });
+    if (log.fill) setOkxTrades((prev) => [{ ...log, symbol, open: true, ...extra }, ...prev]);
+    refreshBal();
+    return log;
+  };
+  const closeOpen = async (filter = () => true) => {
+    const list = tradesRef.current.filter((x) => x.open && okx && x.demo === okx.demo && filter(x));
+    for (const tr of list) {
+      try { await closeTrade(okx, tr); } catch (e) { if (e.code !== "nothing_to_sell") throw e; }
+      setOkxTrades((prev) => prev.map((x) => (x.ts === tr.ts ? { ...x, open: false, closedAt: Date.now() } : x)));
+    }
+    refreshBal();
+    return list.length;
+  };
+  // Scan OKX (public data, on the phone) and let the AI pick at most one coin.
+  const scanAndPick = async (goal, exclude = []) => {
+    const cands = (await scanMarket()).filter((c) => !exclude.includes(c.instId));
+    if (!cands.length) return { pick: null, summary: "" };
+    return (await api("/pick", { method: "POST", body: JSON.stringify({ candidates: cands, goal, lang: langRef.current }) })).pick;
+  };
+  const startMission = async (a) => {
+    const b = (await refreshBal()) || okxBal;
+    const free = (b && b.ccy.USDT && b.ccy.USDT.avail) || 0;
+    const capital = Math.floor(Math.min(a.capitalUsdt || free, free) * 100) / 100;
+    if (!(capital >= 5)) throw Object.assign(new Error("insufficient_usdt"), { code: "insufficient_usdt" });
+    const m = { active: true, demo: okx.demo, capital, targetPct: a.targetPct || 10, days: a.days || 7, maxLossPct: a.maxLossPct || 10,
+      maxPositions: capital >= 40 ? 2 : 1, startTotal: b.totalUsd, startedAt: Date.now(), endsAt: Date.now() + (a.days || 7) * 86400000, lastScan: 0, pnl: 0 };
+    setMission(m);
+    setTimeout(() => missionCycleRef.current && missionCycleRef.current(true), 500);
+    return m;
+  };
+  const stopMission = () => { if (missionRef.current) setMission({ ...missionRef.current, active: false, stoppedAt: Date.now() }); };
+
+  const missionCycleRef = useRef(null);
+  missionCycleRef.current = async (force = false) => {
+    const m = missionRef.current; if (!m || !m.active || !okx || okx.demo !== m.demo) return;
+    const tt = strings(langRef.current);
+    const bal = await refreshBal(); if (!bal) return;
+    const pnl = ((bal.totalUsd - m.startTotal) / m.capital) * 100;
+    const end = async (msgFn) => { try { await closeOpen((x) => x.mission); } catch {} setMission({ ...missionRef.current, active: false, pnl, stoppedAt: Date.now() }); addEvent(msgFn(pnl)); };
+    if (pnl >= m.targetPct) return end(tt.missionTarget);
+    if (pnl <= -m.maxLossPct) return end(tt.missionLoss);
+    if (Date.now() > m.endsAt) return end(tt.missionEnd);
+    let cur = { ...missionRef.current, pnl };
+    const open = tradesRef.current.filter((x) => x.open && x.mission && x.demo === okx.demo);
+    if (open.length < m.maxPositions && (force || Date.now() - (m.lastScan || 0) > 15 * 60000)) {
+      cur.lastScan = Date.now(); setMission(cur);
+      const free = (bal.ccy.USDT && bal.ccy.USDT.avail) || 0;
+      const used = open.reduce((s2, x) => s2 + (x.usdt || 0), 0);
+      const usdt = Math.floor(Math.min(free, m.capital - used, m.capital / m.maxPositions) * 100) / 100;
+      if (usdt >= 5) {
+        try {
+          const pick = await scanAndPick({ targetPct: m.targetPct, days: m.days, pnlPct: +pnl.toFixed(2), daysLeft: Math.ceil((m.endsAt - Date.now()) / 86400000) }, open.map((x) => x.instId));
+          if (pick && pick.pick) {
+            const base = pick.pick.split("-")[0];
+            const log = await openPosition(base, base + "-USD", pick, usdt, { mission: true, source: "mission" });
+            if (log.fill) addEvent(tt.missionBought(base, usdt, pick));
+          }
+        } catch (e) { /* retry next cycle */ }
+      }
+      return;
+    }
+    setMission(cur);
+  };
+
+  const okxProps = { okx, okxCreds, setOkxCreds, okxCfg, setOkxCfg, okxTrades, setOkxTrades, okxBal, refreshBal, okxEvents, addEvent,
+    mission, startMission, stopMission, scanAndPick, openPosition, closeOpen };
+
+  // Live OKX balance (every 60 s) + AI trade manager (every 5 min) while the app is open.
   useEffect(() => {
     if (!okx) { setOkxBal(null); return; }
     let stop = false;
@@ -90,6 +162,7 @@ export default function App() {
           }
         } catch (e) { /* keep the existing OCO; try again next cycle */ }
       }
+      if (!stop && missionCycleRef.current) await missionCycleRef.current();
     };
     manage();
     const balTimer = setInterval(refreshBal, 60000), mgrTimer = setInterval(manage, 300000);
@@ -103,6 +176,7 @@ export default function App() {
     setOkxCfgState(await store.get("okxCfg", { pct: 10 }));
     setOkxTradesState(await store.get("okxTrades", []));
     setOkxEventsState(await store.get("okxEvents", []));
+    setMissionState(await store.get("mission", null));
     const pp = await store.get("paper", null);
     if (pp) setPaperState(await runPaperBot(pp, strings(await store.get("lang", "darija")))); // bot catches up on news since last open
     const s = await store.get("sub", { trialStart: null, plan: null });
@@ -205,7 +279,8 @@ function Chat({ t, rtl, lang, seed, okxProps }) {
   const [busy, setBusy] = useState(false);
   const listRef = useRef(null);
   const actions = useRef({});
-  const { okx, okxCfg, okxTrades, setOkxTrades, refreshBal } = okxProps;
+  const { okx, okxCfg, okxTrades, setOkxTrades, refreshBal, okxBal, mission, startMission, stopMission, scanAndPick, openPosition, closeOpen } = okxProps;
+  const askLive = (text, label, fn) => { const id = "act" + Date.now(); actions.current[id] = fn; say(text + "\n\n" + t.chatConfirmLive, { action: { id, label } }); };
 
   const say = (text, extra) => setMsgs((m) => [...m.filter((x) => !x.pending), { id: "b" + Date.now() + Math.random(), me: false, text, ...extra }]);
   const okxFail = (e) => say(t.okxErr((e && e.code) || "network"));
@@ -265,17 +340,58 @@ function Chat({ t, rtl, lang, seed, okxProps }) {
     if (!q || busy) return;
     setInput(""); setBusy(true);
     setMsgs((m) => [...m, { id: "u" + Date.now(), me: true, text: q }, { id: "p" + Date.now(), me: false, pending: true, text: t.thinking }]);
-    if (/(trade|trad|ترايد|تريد|صفقة|buy|chri|شري|bi3|بيع|sell|\bsed|سد|close|achet|vend|khrej|خرج)/i.test(q)) {
-      let ti = null;
-      try { ti = await api("/intent", { method: "POST", body: JSON.stringify({ text: q }) }); } catch {}
-      if (ti && ti.intent) { await tradeCommand(ti); setBusy(false); return; }
-    }
-    let reply;
-    try { reply = (await api("/chat", { method: "POST", body: JSON.stringify({ text: q, lang }) })).reply; }
-    catch (e) { reply = e.code === "rate_limited" ? t.rateLimited : t.error; }
-    setMsgs((m) => [...m.filter((x) => !x.pending), { id: "b" + Date.now(), me: false, text: stripMd(reply) }]);
+    // Everything goes through Kim (the conversational agent): it understands Darija and decides the action.
+    const usdtFree = okxBal && okxBal.ccy.USDT ? okxBal.ccy.USDT.avail : null;
+    const ctx = { connected: !!okx, demo: okx ? okx.demo : null, balanceUsd: okxBal ? +okxBal.totalUsd.toFixed(2) : null, usdtFree: usdtFree != null ? +usdtFree.toFixed(2) : null,
+      openTrades: okxTrades.filter((x) => x.open && okx && x.demo === okx.demo).map((x) => ({ coin: x.instId, qty: x.qty, entry: x.fill && x.fill.avgPx, sl: x.sl, tp: x.tp, byMission: !!x.mission })),
+      mission: mission && mission.active ? { capital: mission.capital, targetPct: mission.targetPct, days: mission.days, pnlPct: +(mission.pnl || 0).toFixed(2), daysLeft: Math.max(0, Math.ceil((mission.endsAt - Date.now()) / 86400000)) } : null };
+    const history = msgs.filter((x) => !x.pending && x.id !== "hello").slice(-8).map((x) => ({ me: x.me, text: String(x.text).slice(0, 300) }));
+    let res;
+    try { res = await api("/agent", { method: "POST", body: JSON.stringify({ text: q, history, ctx, lang }) }); }
+    catch (e) { say(e.code === "rate_limited" ? t.rateLimited : t.error); setBusy(false); return; }
+    const a = res.action || { type: "none" };
+    const reply = stripMd(res.reply || "");
+    try {
+      if (a.type === "open" || a.type === "close") {
+        if (reply) say(reply);
+        await tradeCommand({ intent: a.type, asset: res.asset });
+      } else if (a.type === "close_all") {
+        if (reply) say(reply);
+        if (!okx) say(t.notConnected);
+        else if (!okxTrades.some((x) => x.open && x.demo === okx.demo)) say(t.chatNoOpenTrade("—"));
+        else if (okx.demo) { const n = await closeOpen(); say(t.chatClosed(n + " ✓")); }
+        else askLive(t.closeAllConfirm, t.closeTrade, async () => { try { const n = await closeOpen(); say(t.chatClosed(n + " ✓")); } catch (e) { okxFail(e); } });
+      } else if (a.type === "scan") {
+        if (reply) say(reply);
+        if (!okx) { say(t.notConnected); }
+        else {
+          setMsgs((m) => [...m, { id: "p" + Date.now(), me: false, pending: true, text: t.scanning }]);
+          const pick = await scanAndPick(null, []);
+          if (!pick || !pick.pick) say(t.scanNone(pick && pick.summary));
+          else {
+            const base = pick.pick.split("-")[0];
+            const b = await okx.balances().catch(() => null);
+            const usdt = b ? Math.floor(((b.ccy.USDT && b.ccy.USDT.avail) || 0) * (okxCfg.pct || 10)) / 100 : 0;
+            const id = "act" + Date.now();
+            actions.current[id] = async () => { try { const log = await openPosition(base, base + "-USD", pick, usdt, { source: "scan" }); say(log.error ? (log.error.startsWith("oco") ? t.ocoFailed : t.okxErr(log.error)) : t.done(log.qty, base, fmtPrice(log.fill.avgPx))); } catch (e) { okxFail(e); } };
+            say(t.scanFound(base, pick) + "\n\n" + t.planDisclaimer + (okx.demo ? "" : "\n\n" + t.liveWarn), usdt >= 5 ? { action: { id, label: t.buyIt(fmtMoney(usdt)) } } : undefined);
+          }
+        }
+      } else if (a.type === "start_mission") {
+        if (reply) say(reply);
+        if (!okx) say(t.notConnected);
+        else {
+          const go = async () => { try { const m = await startMission(a); say(t.missionStarted(m)); } catch (e) { okxFail(e); } };
+          if (okx.demo) await go(); else askLive(t.missionStarted({ ...a, capital: a.capitalUsdt || usdtFree || 0 }), t.missionStartBtn, go);
+        }
+      } else if (a.type === "stop_mission") {
+        stopMission(); say((reply ? reply + "\n\n" : "") + t.missionStopped);
+      } else {
+        say(reply || t.error);
+      }
+    } catch (e) { okxFail(e); }
     setBusy(false);
-  }, [busy, lang, t, okx, okxCfg, okxTrades]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [busy, lang, t, okx, okxCfg, okxTrades, okxBal, mission, msgs]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { if (seed && seed.q) send(seed.q); }, [seed]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setTimeout(() => listRef.current && listRef.current.scrollToEnd({ animated: true }), 50); }, [msgs]);
@@ -675,7 +791,7 @@ function TradePlan({ t, rtl, lang, asset, base, isCrypto, okx, okxCreds, okxCfg,
 
 
 // ------------------------------------------------------------------ Real OKX wallet (live balance) + AI manager activity
-function OkxWallet({ t, rtl, okx, okxBal, refreshBal, okxTrades, okxEvents }) {
+function OkxWallet({ t, rtl, okx, okxBal, refreshBal, okxTrades, okxEvents, mission, stopMission }) {
   const [busy, setBusy] = useState(false);
   const coins = okxBal ? Object.entries(okxBal.ccy).filter(([, v]) => v.eq > 0 && (v.usd >= 0.5 || v.eq >= 1)).sort((a, b) => b[1].usd - a[1].usd) : [];
   const open = okxTrades.filter((x) => x.open && x.demo === okx.demo);
@@ -699,6 +815,18 @@ function OkxWallet({ t, rtl, okx, okxBal, refreshBal, okxTrades, okxEvents }) {
         {open.map((tr) => (
           <Text key={tr.ts} style={[st.sub, { marginTop: 4 }, rtl && st.rtl]}>{tr.instId} · {fmtQty(tr.qty || 0)} @ {tr.fill ? fmtPrice(tr.fill.avgPx) : "—"}{tr.sl ? ` · SL ${tr.sl} · TP ${tr.tp}` : ""}</Text>
         ))}
+      </View>
+      <Text style={[st.label, { marginTop: 12 }, rtl && st.rtl]}>{t.missionTitle}</Text>
+      <View style={st.card}>
+        {mission && mission.active ? (
+          <View>
+            <Text style={[st.body, { marginTop: 0, fontWeight: "700" }, rtl && st.rtl]}>{t.missionLine(mission, mission.pnl || 0, Math.max(0, Math.ceil((mission.endsAt - Date.now()) / 86400000)))}</Text>
+            <View style={{ height: 8, backgroundColor: C.line, borderRadius: 4, marginTop: 10, overflow: "hidden" }}>
+              <View style={{ height: 8, width: `${Math.max(0, Math.min(100, ((mission.pnl || 0) / mission.targetPct) * 100))}%`, backgroundColor: (mission.pnl || 0) >= 0 ? C.green : C.red }} />
+            </View>
+            <Pressable style={[st.chip, { marginTop: 12, alignSelf: rtl ? "flex-end" : "flex-start" }]} onPress={stopMission}><Text style={[st.chipText, { color: C.red }]}>⏹️ {t.missionStop}</Text></Pressable>
+          </View>
+        ) : <Text style={[st.sub, rtl && st.rtl]}>{t.missionNone}</Text>}
       </View>
       <Text style={[st.label, { marginTop: 12 }, rtl && st.rtl]}>{t.managerTitle}</Text>
       <View style={st.card}>

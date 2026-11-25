@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { sha256, hmacSha256, utf8, base64, sign, floorTo, roundTo, createOkx, executePlan, closeTrade, replaceStop, isGone } from "./okx.js";
+import { sha256, hmacSha256, utf8, base64, sign, floorTo, roundTo, createOkx, executePlan, closeTrade, replaceStop, isGone, scanMarket, scoreCandles } from "./okx.js";
 let fails = 0; const ok = (c, m) => { console.log((c ? "PASS " : "FAIL ") + m); if (!c) fails++; };
 for (const s of ["", "abc", "a".repeat(55), "a".repeat(56), "a".repeat(64), "a".repeat(1000), "مرحبا 🚀 é"]) {
   ok(Buffer.from(sha256(utf8(s))).toString("hex") === crypto.createHash("sha256").update(s).digest("hex"), "sha256 len " + s.length);
@@ -48,4 +48,18 @@ const cx = calls.find((c) => c.p === "/api/v5/trade/cancel-algos"), no = calls.f
 ok(cx && cx.b[0].algoId === "a1" && no && no.b.slTriggerPx === "98.00" && no.b.tpTriggerPx === log.tp && moved.sl === "98.00", "replaceStop: cancel old OCO, new OCO with higher SL, same TP");
 e = null; try { await replaceStop(okx, log, 101); } catch (x) { e = x; } ok(e && e.code === "stop_above_price", "replaceStop refuses stop above price");
 ok(isGone({ ccy: { SOL: { eq: 0.1 } } }, { instId: "SOL-USDT", qty: 1 }) && !isGone({ ccy: { SOL: { eq: 1 } } }, { instId: "SOL-USDT", qty: 1 }), "isGone detects closed positions");
+// scanner
+const up = Array.from({ length: 100 }, (_, i) => 100 * (1 + i * 0.002 + Math.sin(i * 1.3) * 0.008));
+const down = Array.from({ length: 100 }, (_, i) => 100 * (1 - i * 0.003));
+ok(scoreCandles(up).score >= 3 && scoreCandles(down).score < 3, "scoreCandles likes uptrends, rejects downtrends");
+const mk = (arr) => arr.slice().reverse().map((c, i) => [String(i), "0", "0", "0", String(c), "0", "0", "0", "1"]);
+const scanFetch = async (u) => ({ json: async () => u.includes("tickers") ? { data: [
+  { instId: "UP-USDT", last: String(up[99]), open24h: String(up[75]), volCcy24h: "50000000", vol24h: "400000" },
+  { instId: "DN-USDT", last: String(down[99]), open24h: String(down[96]), volCcy24h: "50000000", vol24h: "600000" },
+  { instId: "USDC-USDT", last: "1", open24h: "1", volCcy24h: "90000000", vol24h: "90000000" },
+  { instId: "TINY-USDT", last: "1", open24h: "1", volCcy24h: "1000", vol24h: "1000" },
+  { instId: "BTC-EUR", last: "1", open24h: "1", volCcy24h: "90000000", vol24h: "1" } ] }
+  : { data: mk(u.includes("UP-USDT") ? up : down) } });
+const sc = await scanMarket(scanFetch);
+ok(sc.length === 1 && sc[0].instId === "UP-USDT" && sc[0].vol24 >= 3e6 && sc[0].rsi14 != null, "scanMarket: keeps liquid uptrending USDT coins, drops stables/illiquid/downtrends");
 console.log(fails ? fails + " FAILED" : "ALL OKX TESTS PASSED");

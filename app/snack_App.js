@@ -39,7 +39,7 @@ const S = {
     alertsTitle: "آخر الأخبار المهمة", alertsEmpty: "ما كاين حتى خبر مهم دابا. غادي يوصلك إشعار ملي يطيح شي خبر كبير.",
     pullRefresh: "جر لتحت باش تحدث", impact: "الأهمية", openSource: "حل المصدر", readMore: "قرا التحليل", readLess: "سد",
     chatTitle: "اسول على أي سهم ولا كريبتو", chatPlaceholder: "مثلا: واش مزيان نشري Nvidia دابا؟", send: "صيفط",
-    thinking: "كنجمع المعلومات وكنحلل...", chatHello: "مرحبا! 👋 كتب سمية أي سهم ولا عملة، ونعطيك التحليل: الاتجاه، المستويات، الأخبار والمخاطر.",
+    thinking: "كنجمع المعلومات وكنحلل...", chatHello: "مرحبا! 👋 أنا Kim. هضر معايا بالدارجة بحال صاحبك: سولني على أي coin ولا سهم، قول ليا «قلب ليا على coin مزيانة»، «شري ليا SOL»، ولا عطيني مهمة: «عندي 93 USDT، شري وبيع بوحدك».",
     suggestions: ["Bitcoin", "Nvidia", "الذهب", "Solana", "Tesla"],
     watchTitle: "اللائحة ديالي", watchSearch: "زيد سهم ولا عملة (مثلا: Apple، ETH)", add: "زيد", watchEmpty: "اللائحة خاوية. زيد الأصول اللي كتبعها.",
     notFound: "ما لقيتش هاد السمية", analyse: "حلل", remove: "حيد", today: "اليوم",
@@ -73,7 +73,7 @@ const S = {
     alertsTitle: "آخر الأخبار المهمة", alertsEmpty: "لا توجد أخبار مهمة حالياً. ستصلك إشعارات عند وقوع حدث كبير.",
     pullRefresh: "اسحب للأسفل للتحديث", impact: "الأهمية", openSource: "فتح المصدر", readMore: "اقرأ التحليل", readLess: "إغلاق",
     chatTitle: "اسأل عن أي سهم أو عملة رقمية", chatPlaceholder: "مثلاً: هل الوقت مناسب لشراء Nvidia؟", send: "إرسال",
-    thinking: "أجمع المعلومات وأحلل...", chatHello: "مرحباً! 👋 اكتب اسم أي سهم أو عملة وسأعطيك تحليلاً: الاتجاه، المستويات، الأخبار والمخاطر.",
+    thinking: "أجمع المعلومات وأحلل...", chatHello: "مرحباً! 👋 أنا Kim. اسألني عن أي عملة أو سهم، أو قل «ابحث لي عن عملة جيدة»، «اشترِ SOL»، أو أعطني مهمة: «لدي 93 USDT، تداول بنفسك».",
     suggestions: ["Bitcoin", "Nvidia", "الذهب", "Solana", "Tesla"],
     watchTitle: "قائمتي", watchSearch: "أضف سهماً أو عملة (مثلاً: Apple، ETH)", add: "إضافة", watchEmpty: "القائمة فارغة. أضف الأصول التي تتابعها.",
     notFound: "لم أجد هذا الاسم", analyse: "حلّل", remove: "حذف", today: "اليوم",
@@ -107,7 +107,7 @@ const S = {
     alertsTitle: "Dernières news importantes", alertsEmpty: "Aucune news majeure pour l'instant. Tu recevras une notification dès qu'un événement important tombe.",
     pullRefresh: "Tire vers le bas pour actualiser", impact: "Impact", openSource: "Ouvrir la source", readMore: "Lire l'analyse", readLess: "Fermer",
     chatTitle: "Pose une question sur n'importe quelle action ou crypto", chatPlaceholder: "Ex. : Nvidia, c'est le moment d'acheter ?", send: "Envoyer",
-    thinking: "Je collecte les infos et j'analyse...", chatHello: "Salut ! 👋 Écris le nom d'une action ou d'une crypto et je te donne une analyse : tendance, niveaux, news et risques.",
+    thinking: "Je collecte les infos et j'analyse...", chatHello: "Salut ! 👋 Moi c'est Kim. Demande-moi n'importe quelle crypto ou action, « trouve-moi une bonne crypto », « achète SOL », ou donne-moi une mission : « j'ai 93 USDT, trade tout seul ».",
     suggestions: ["Bitcoin", "Nvidia", "Or", "Solana", "Tesla"],
     watchTitle: "Ma liste", watchSearch: "Ajoute une action ou une crypto (ex. : Apple, ETH)", add: "Ajouter", watchEmpty: "Ta liste est vide. Ajoute les actifs que tu suis.",
     notFound: "Introuvable", analyse: "Analyser", remove: "Retirer", today: "Auj.",
@@ -141,7 +141,7 @@ const S = {
     alertsTitle: "Latest important news", alertsEmpty: "No major news right now. You'll get a notification as soon as something big happens.",
     pullRefresh: "Pull down to refresh", impact: "Impact", openSource: "Open source", readMore: "Read analysis", readLess: "Close",
     chatTitle: "Ask about any stock or crypto", chatPlaceholder: "e.g. Is it a good time to buy Nvidia?", send: "Send",
-    thinking: "Gathering data and analysing...", chatHello: "Hi! 👋 Type any stock or crypto name and I'll give you an analysis: trend, levels, news and risks.",
+    thinking: "Gathering data and analysing...", chatHello: "Hi! 👋 I'm Kim. Ask me about any coin or stock, say \"find me a good coin\", \"buy SOL\", or give me a mission: \"I have 93 USDT, trade by yourself\".",
     suggestions: ["Bitcoin", "Nvidia", "Gold", "Solana", "Tesla"],
     watchTitle: "My watchlist", watchSearch: "Add a stock or crypto (e.g. Apple, ETH)", add: "Add", watchEmpty: "Your watchlist is empty. Add the assets you follow.",
     notFound: "Not found", analyse: "Analyse", remove: "Remove", today: "Today",
@@ -162,6 +162,15 @@ const S = {
 // OKX connection + AI trade plan strings
 const X = {
   darija: {
+    missionTitle: "🎯 المهمة ديال البوت", missionStop: "وقف المهمة", missionNone: "ما كايناش مهمة. قول للبوت ف الشات مثلا: «عندي 93 USDT، شري وبيع بوحدك، بغيت 10% ف 7 أيام».",
+    missionLine: (m, pnl, dl) => `الهدف +${m.targetPct}% ف ${m.days} أيام · دابا ${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}% · باقي ${dl} يوم · أقصى خسارة -${m.maxLossPct}% · رأس المال ${m.capital} USDT`,
+    missionStarted: (m) => `🎯 بدات المهمة: ${m.capital} USDT، الهدف +${m.targetPct}% ف ${m.days} أيام، وكنوقف إلا وصلت الخسارة -${m.maxLossPct}%. غادي نقلب على أحسن coins ف OKX كل 15 دقيقة وندير الصفقات بوحدي (ملي التطبيق محلول).`,
+    missionStartBtn: "✅ بدا المهمة", missionStopped: "⏹️ وقفت المهمة. الصفقات المفتوحة باقين محميين بالـStop-loss والـTake-profit ف OKX.",
+    missionTarget: (p) => `🎉 وصلنا للهدف! الربح ${p.toFixed(2)}%. سديت الصفقات ووقفت المهمة.`, missionLoss: (p) => `🛑 الخسارة وصلت ${p.toFixed(2)}%، سديت الصفقات ووقفت المهمة باش نحمي الفلوس.`, missionEnd: (p) => `⌛ سالات المدة ديال المهمة. النتيجة: ${p >= 0 ? "+" : ""}${p.toFixed(2)}%. سديت الصفقات.`,
+    missionBought: (b, usdt, p) => `🤖 المهمة: شريت ${b} بـ ${usdt} USDT · SL ${p.stopLoss} · TP ${p.takeProfit}. ${p.summary || ""}`,
+    scanning: "🔎 كنقلب ف OKX على أحسن coin دابا...", scanNone: (s) => `قلبت ف OKX وما لقيت حتى coin نقية دابا، فاحسن نتسناو. ${s || ""}`,
+    scanFound: (b, p) => `🔎 بانت ليا ${b} مزيانة دابا.\nالدخول ${p.entry} · SL ${p.stopLoss} (-${p.slPct}%) · TP ${p.takeProfit} (+${p.tpPct}%) · الثقة: ${p.confidence || "-"}\n\n${p.summary || ""}${p.risks && p.risks.length ? "\n⚠️ " + p.risks.join(" · ") : ""}`,
+    buyIt: (usdt) => `شريها بـ ${usdt} USDT`, closeAllConfirm: "نسد جميع الصفقات؟",
     okxWallet: "💼 الرصيد ديالي ف OKX", totalEquity: "القيمة الكلية", coins: "العملات", refresh: "حدث",
     chatTradeNoAsset: "فاش بغيتي ندير الترايد؟ كتب مثلا: dir trade f SOL", chatNoOpenTrade: (b) => `ما عندك حتى صفقة مفتوحة من KimMarket ف ${b}.`,
     chatPlanWait: (b, s) => `⏸️ ما دخلتش ف ${b}: ما كايناش فرصة واضحة دابا.\n\n${s}`,
@@ -189,6 +198,15 @@ const X = {
     okxErr: (c) => ({ insufficient_usdt: "الـUSDT ما كافيش ف OKX.", below_min_size: "المبلغ صغير بزاف على OKX.", plan_out_of_date: "الثمن تبدل بزاف، طلب خطة جديدة.", instrument_not_found: "هاد العملة ما كايناش ف OKX مقابل USDT.", nothing_to_sell: "ما كاين والو باش يتباع.", network: "مشكل ف الاتصال بـOKX.", "50113": "المفاتيح غالطين (Secret).", "50111": "API key غالط.", "50105": "Passphrase غالط.", "50101": "هاد المفتاح ماشي ديال هاد الوضع (Demo/Live).", "50119": "API key ما كاينش.", "51008": "الرصيد ما كافيش." }[c] || "خطأ من OKX: " + c),
   },
   ar: {
+    missionTitle: "🎯 مهمة البوت", missionStop: "إيقاف المهمة", missionNone: "لا توجد مهمة. قل للبوت مثلًا: «لدي 93 USDT، اشترِ وبِع بنفسك، أريد 10% في 7 أيام».",
+    missionLine: (m, pnl, dl) => `الهدف +${m.targetPct}% في ${m.days} أيام · الآن ${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}% · متبقٍ ${dl} يوم · أقصى خسارة -${m.maxLossPct}% · رأس المال ${m.capital} USDT`,
+    missionStarted: (m) => `🎯 بدأت المهمة: ${m.capital} USDT، الهدف +${m.targetPct}% في ${m.days} أيام، وأتوقف إذا بلغت الخسارة -${m.maxLossPct}%. سأبحث عن أفضل العملات في OKX كل 15 دقيقة وأتداول بنفسي (عندما يكون التطبيق مفتوحًا).`,
+    missionStartBtn: "✅ ابدأ المهمة", missionStopped: "⏹️ أوقفت المهمة. الصفقات المفتوحة محمية بوقف الخسارة وجني الأرباح في OKX.",
+    missionTarget: (p) => `🎉 وصلنا للهدف! الربح ${p.toFixed(2)}%. أغلقت الصفقات وأوقفت المهمة.`, missionLoss: (p) => `🛑 بلغت الخسارة ${p.toFixed(2)}%، أغلقت الصفقات وأوقفت المهمة لحماية المال.`, missionEnd: (p) => `⌛ انتهت مدة المهمة. النتيجة: ${p >= 0 ? "+" : ""}${p.toFixed(2)}%. أغلقت الصفقات.`,
+    missionBought: (b, usdt, p) => `🤖 المهمة: اشتريت ${b} بـ ${usdt} USDT · SL ${p.stopLoss} · TP ${p.takeProfit}. ${p.summary || ""}`,
+    scanning: "🔎 أبحث في OKX عن أفضل عملة الآن...", scanNone: (s) => `بحثت في OKX ولم أجد عملة مناسبة الآن، الأفضل الانتظار. ${s || ""}`,
+    scanFound: (b, p) => `🔎 تبدو ${b} جيدة الآن.\nالدخول ${p.entry} · SL ${p.stopLoss} (-${p.slPct}%) · TP ${p.takeProfit} (+${p.tpPct}%) · الثقة: ${p.confidence || "-"}\n\n${p.summary || ""}${p.risks && p.risks.length ? "\n⚠️ " + p.risks.join(" · ") : ""}`,
+    buyIt: (usdt) => `اشترِها بـ ${usdt} USDT`, closeAllConfirm: "إغلاق جميع الصفقات؟",
     okxWallet: "💼 رصيدي في OKX", totalEquity: "القيمة الإجمالية", coins: "العملات", refresh: "تحديث",
     chatTradeNoAsset: "على أي أصل تريد الصفقة؟ اكتب مثلًا: dir trade f SOL", chatNoOpenTrade: (b) => `لا توجد صفقة مفتوحة من KimMarket على ${b}.`,
     chatPlanWait: (b, s) => `⏸️ لم أدخل في ${b}: لا توجد فرصة واضحة الآن.\n\n${s}`,
@@ -216,6 +234,15 @@ const X = {
     okxErr: (c) => ({ insufficient_usdt: "رصيد USDT غير كافٍ في OKX.", below_min_size: "المبلغ أصغر من الحد الأدنى في OKX.", plan_out_of_date: "تغير السعر كثيرًا، اطلب خطة جديدة.", instrument_not_found: "هذه العملة غير متاحة مقابل USDT في OKX.", nothing_to_sell: "لا يوجد ما يُباع.", network: "مشكلة في الاتصال بـOKX.", "50113": "المفتاح السري غير صحيح.", "50111": "API key غير صحيح.", "50105": "Passphrase غير صحيح.", "50101": "هذا المفتاح لا يطابق الوضع (تجريبي/حقيقي).", "50119": "API key غير موجود.", "51008": "الرصيد غير كافٍ." }[c] || "خطأ من OKX: " + c),
   },
   fr: {
+    missionTitle: "🎯 Mission du bot", missionStop: "Arrêter la mission", missionNone: "Aucune mission. Dis au bot par ex. : « J'ai 93 USDT, achète et vends tout seul, je veux 10 % en 7 jours ».",
+    missionLine: (m, pnl, dl) => `Objectif +${m.targetPct}% en ${m.days} j · actuel ${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}% · reste ${dl} j · perte max -${m.maxLossPct}% · capital ${m.capital} USDT`,
+    missionStarted: (m) => `🎯 Mission lancée : ${m.capital} USDT, objectif +${m.targetPct}% en ${m.days} jours, arrêt si la perte atteint -${m.maxLossPct}%. Je scanne OKX toutes les 15 min et je trade seul (app ouverte).`,
+    missionStartBtn: "✅ Lancer la mission", missionStopped: "⏹️ Mission arrêtée. Les positions restent protégées par stop-loss/take-profit sur OKX.",
+    missionTarget: (p) => `🎉 Objectif atteint ! +${p.toFixed(2)}%. Positions fermées, mission terminée.`, missionLoss: (p) => `🛑 Perte de ${p.toFixed(2)}% atteinte : positions fermées, mission arrêtée.`, missionEnd: (p) => `⌛ Fin de la mission. Résultat : ${p >= 0 ? "+" : ""}${p.toFixed(2)}%. Positions fermées.`,
+    missionBought: (b, usdt, p) => `🤖 Mission : achat ${b} pour ${usdt} USDT · SL ${p.stopLoss} · TP ${p.takeProfit}. ${p.summary || ""}`,
+    scanning: "🔎 Je cherche la meilleure crypto sur OKX...", scanNone: (s) => `Rien de propre sur OKX pour l'instant, mieux vaut attendre. ${s || ""}`,
+    scanFound: (b, p) => `🔎 ${b} a l'air intéressante.\nEntrée ${p.entry} · SL ${p.stopLoss} (-${p.slPct}%) · TP ${p.takeProfit} (+${p.tpPct}%) · confiance : ${p.confidence || "-"}\n\n${p.summary || ""}${p.risks && p.risks.length ? "\n⚠️ " + p.risks.join(" · ") : ""}`,
+    buyIt: (usdt) => `Acheter pour ${usdt} USDT`, closeAllConfirm: "Fermer toutes les positions ?",
     okxWallet: "💼 Mon solde OKX", totalEquity: "Valeur totale", coins: "Cryptos", refresh: "Actualiser",
     chatTradeNoAsset: "Sur quel actif ? Écris par ex. : dir trade f SOL", chatNoOpenTrade: (b) => `Aucun trade KimMarket ouvert sur ${b}.`,
     chatPlanWait: (b, s) => `⏸️ Pas d'entrée sur ${b} : pas de setup clair.\n\n${s}`,
@@ -243,6 +270,15 @@ const X = {
     okxErr: (c) => ({ insufficient_usdt: "USDT insuffisant sur OKX.", below_min_size: "Montant sous le minimum OKX.", plan_out_of_date: "Le prix a trop bougé, demande un nouveau plan.", instrument_not_found: "Paire USDT introuvable sur OKX.", nothing_to_sell: "Rien à vendre.", network: "Problème de connexion à OKX.", "50113": "Secret incorrect.", "50111": "API key incorrecte.", "50105": "Passphrase incorrecte.", "50101": "Clé ne correspond pas au mode (Démo/Réel).", "50119": "API key inexistante.", "51008": "Solde insuffisant." }[c] || "Erreur OKX : " + c),
   },
   en: {
+    missionTitle: "🎯 Bot mission", missionStop: "Stop mission", missionNone: "No mission. Tell the bot e.g.: \"I have 93 USDT, buy and sell by yourself, I want 10% in 7 days\".",
+    missionLine: (m, pnl, dl) => `Target +${m.targetPct}% in ${m.days} days · now ${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}% · ${dl} days left · max loss -${m.maxLossPct}% · capital ${m.capital} USDT`,
+    missionStarted: (m) => `🎯 Mission started: ${m.capital} USDT, target +${m.targetPct}% in ${m.days} days, stopping if loss hits -${m.maxLossPct}%. I'll scan OKX every 15 min and trade by myself (while the app is open).`,
+    missionStartBtn: "✅ Start mission", missionStopped: "⏹️ Mission stopped. Open trades stay protected by stop-loss/take-profit on OKX.",
+    missionTarget: (p) => `🎉 Target reached! +${p.toFixed(2)}%. Closed the trades and ended the mission.`, missionLoss: (p) => `🛑 Loss reached ${p.toFixed(2)}%: closed the trades and stopped the mission to protect your money.`, missionEnd: (p) => `⌛ Mission time is over. Result: ${p >= 0 ? "+" : ""}${p.toFixed(2)}%. Trades closed.`,
+    missionBought: (b, usdt, p) => `🤖 Mission: bought ${b} for ${usdt} USDT · SL ${p.stopLoss} · TP ${p.takeProfit}. ${p.summary || ""}`,
+    scanning: "🔎 Scanning OKX for the best coin right now...", scanNone: (s) => `Scanned OKX and found nothing clean right now; better to wait. ${s || ""}`,
+    scanFound: (b, p) => `🔎 ${b} looks good right now.\nEntry ${p.entry} · SL ${p.stopLoss} (-${p.slPct}%) · TP ${p.takeProfit} (+${p.tpPct}%) · confidence: ${p.confidence || "-"}\n\n${p.summary || ""}${p.risks && p.risks.length ? "\n⚠️ " + p.risks.join(" · ") : ""}`,
+    buyIt: (usdt) => `Buy for ${usdt} USDT`, closeAllConfirm: "Close all trades?",
     okxWallet: "💼 My OKX balance", totalEquity: "Total value", coins: "Coins", refresh: "Refresh",
     chatTradeNoAsset: "Which asset? Type e.g.: dir trade f SOL", chatNoOpenTrade: (b) => `No open KimMarket trade on ${b}.`,
     chatPlanWait: (b, s) => `⏸️ No entry on ${b}: no clear setup right now.\n\n${s}`,
@@ -503,6 +539,49 @@ function isGone(bal, trade) {
   return eq < (trade.qty || 0) * 0.5;
 }
 
+// ---------------------------------------------------------------- market scanner (public OKX data, runs on the phone)
+const STABLE = new Set(["USDC", "DAI", "FDUSD", "TUSD", "USDE", "PYUSD", "USDD", "EUR", "EURT", "USDP", "BUSD", "USTC", "UST", "XAUT", "PAXG", "WBTC", "STETH", "WETH", "USDG", "RLUSD"]);
+const sma = (a, n) => (a.length >= n ? a.slice(-n).reduce((s, x) => s + x, 0) / n : null);
+function rsi(closes, n = 14) {
+  if (closes.length <= n) return null;
+  let g = 0, l = 0;
+  for (let i = closes.length - n; i < closes.length; i++) { const d = closes[i] - closes[i - 1]; if (d > 0) g += d; else l -= d; }
+  return l === 0 ? 100 : 100 - 100 / (1 + g / l);
+}
+const r2 = (x, d = 2) => (x == null || !isFinite(x) ? null : +x.toFixed(d));
+
+function scoreCandles(c) { // c: closes oldest -> newest (1h)
+  const last = c[c.length - 1], s20 = sma(c, 20), s50 = sma(c, 50), R = rsi(c);
+  let atr = 0; for (let i = c.length - 24; i < c.length; i++) atr += Math.abs(c[i] / c[i - 1] - 1); atr = (atr / 24) * 100;
+  const chg4h = (last / c[c.length - 5] - 1) * 100, hi = Math.max(...c.slice(-48)), lo = Math.min(...c.slice(-48));
+  let score = 0;
+  if (s20 && s50 && last > s20 && s20 > s50) score += 3; else if (s20 && last > s20) score += 1; else score -= 2;
+  if (R != null) { if (R >= 50 && R <= 68) score += 2; else if (R > 75) score -= 3; else if (R < 40) score -= 1; }
+  if (chg4h > 0 && chg4h < 6) score += 1; if (chg4h >= 8) score -= 1;
+  const fromHi = (hi / last - 1) * 100; if (fromHi > 1 && fromHi < 12) score += 1;
+  return { last, sma20: r2(s20, 8), sma50: r2(s50, 8), rsi14: r2(R, 1), chg4h: r2(chg4h), atrPct: r2(atr), high48h: hi, low48h: lo, score, closes12h: c.slice(-12).map((x) => +x.toPrecision(6)) };
+}
+
+async function scanMarket(fetchImpl = fetch, { minVol = 3e6, max = 6 } = {}) {
+  const base = "https://www.okx.com";
+  const t = await fetchImpl(base + "/api/v5/market/tickers?instType=SPOT").then((r) => r.json());
+  const tick = (t.data || []).filter((x) => x.instId.endsWith("-USDT") && !STABLE.has(x.instId.split("-")[0]))
+    .map((x) => { const last = parseFloat(x.last), open = parseFloat(x.open24h); return { instId: x.instId, last, chg24: r2((last / open - 1) * 100), vol24: Math.round(parseFloat(x.volCcy24h) || 0) }; })
+    .filter((x) => x.last > 0 && x.vol24 >= minVol && x.chg24 > -4 && x.chg24 < 18)
+    .sort((a, b) => (b.chg24 + Math.log10(b.vol24) * 2) - (a.chg24 + Math.log10(a.vol24) * 2))
+    .slice(0, 14);
+  const out = [];
+  for (const x of tick) {
+    try {
+      const k = await fetchImpl(`${base}/api/v5/market/candles?instId=${x.instId}&bar=1H&limit=100`).then((r) => r.json());
+      const closes = (k.data || []).map((row) => parseFloat(row[4])).reverse();
+      if (closes.length < 60) continue;
+      out.push({ ...x, ...scoreCandles(closes), last: x.last });
+    } catch {}
+  }
+  return out.filter((x) => x.score >= 3).sort((a, b) => b.score - a.score || b.vol24 - a.vol24).slice(0, max);
+}
+
 // ===== App
 
 const API = "https://market-qa-bot.shopecom11992.workers.dev/api";
@@ -553,11 +632,83 @@ export default function App() {
   const [okxEvents, setOkxEventsState] = useState([]);
   const addEvent = (text) => setOkxEventsState((prev) => { const n = [{ ts: Date.now(), text }, ...prev].slice(0, 40); store.set("okxEvents", n); return n; });
   const refreshBal = useCallback(async () => { if (!okx) { setOkxBal(null); return null; } try { const b = await okx.balances(); setOkxBal(b); return b; } catch { return null; } }, [okx]);
-  const okxProps = { okx, okxCreds, setOkxCreds, okxCfg, setOkxCfg, okxTrades, setOkxTrades, okxBal, refreshBal, okxEvents, addEvent };
-
-  // Live OKX balance (every 60 s) + AI trade manager (every 5 min) while the app is open.
   const tradesRef = useRef(okxTrades); tradesRef.current = okxTrades;
   const langRef = useRef(lang); langRef.current = lang;
+  const [mission, setMissionState] = useState(null);
+  const missionRef = useRef(mission); missionRef.current = mission;
+  const setMission = (m) => { missionRef.current = m; setMissionState(m); store.set("mission", m); };
+
+  // Buy with a validated plan, store the trade (OCO protects it on OKX).
+  const openPosition = async (base, symbol, plan, usdt, extra = {}) => {
+    const log = await executePlan(okx, { base, usdt, takeProfit: plan.takeProfit, stopLoss: plan.stopLoss });
+    if (log.fill) setOkxTrades((prev) => [{ ...log, symbol, open: true, ...extra }, ...prev]);
+    refreshBal();
+    return log;
+  };
+  const closeOpen = async (filter = () => true) => {
+    const list = tradesRef.current.filter((x) => x.open && okx && x.demo === okx.demo && filter(x));
+    for (const tr of list) {
+      try { await closeTrade(okx, tr); } catch (e) { if (e.code !== "nothing_to_sell") throw e; }
+      setOkxTrades((prev) => prev.map((x) => (x.ts === tr.ts ? { ...x, open: false, closedAt: Date.now() } : x)));
+    }
+    refreshBal();
+    return list.length;
+  };
+  // Scan OKX (public data, on the phone) and let the AI pick at most one coin.
+  const scanAndPick = async (goal, exclude = []) => {
+    const cands = (await scanMarket()).filter((c) => !exclude.includes(c.instId));
+    if (!cands.length) return { pick: null, summary: "" };
+    return (await api("/pick", { method: "POST", body: JSON.stringify({ candidates: cands, goal, lang: langRef.current }) })).pick;
+  };
+  const startMission = async (a) => {
+    const b = (await refreshBal()) || okxBal;
+    const free = (b && b.ccy.USDT && b.ccy.USDT.avail) || 0;
+    const capital = Math.floor(Math.min(a.capitalUsdt || free, free) * 100) / 100;
+    if (!(capital >= 5)) throw Object.assign(new Error("insufficient_usdt"), { code: "insufficient_usdt" });
+    const m = { active: true, demo: okx.demo, capital, targetPct: a.targetPct || 10, days: a.days || 7, maxLossPct: a.maxLossPct || 10,
+      maxPositions: capital >= 40 ? 2 : 1, startTotal: b.totalUsd, startedAt: Date.now(), endsAt: Date.now() + (a.days || 7) * 86400000, lastScan: 0, pnl: 0 };
+    setMission(m);
+    setTimeout(() => missionCycleRef.current && missionCycleRef.current(true), 500);
+    return m;
+  };
+  const stopMission = () => { if (missionRef.current) setMission({ ...missionRef.current, active: false, stoppedAt: Date.now() }); };
+
+  const missionCycleRef = useRef(null);
+  missionCycleRef.current = async (force = false) => {
+    const m = missionRef.current; if (!m || !m.active || !okx || okx.demo !== m.demo) return;
+    const tt = strings(langRef.current);
+    const bal = await refreshBal(); if (!bal) return;
+    const pnl = ((bal.totalUsd - m.startTotal) / m.capital) * 100;
+    const end = async (msgFn) => { try { await closeOpen((x) => x.mission); } catch {} setMission({ ...missionRef.current, active: false, pnl, stoppedAt: Date.now() }); addEvent(msgFn(pnl)); };
+    if (pnl >= m.targetPct) return end(tt.missionTarget);
+    if (pnl <= -m.maxLossPct) return end(tt.missionLoss);
+    if (Date.now() > m.endsAt) return end(tt.missionEnd);
+    let cur = { ...missionRef.current, pnl };
+    const open = tradesRef.current.filter((x) => x.open && x.mission && x.demo === okx.demo);
+    if (open.length < m.maxPositions && (force || Date.now() - (m.lastScan || 0) > 15 * 60000)) {
+      cur.lastScan = Date.now(); setMission(cur);
+      const free = (bal.ccy.USDT && bal.ccy.USDT.avail) || 0;
+      const used = open.reduce((s2, x) => s2 + (x.usdt || 0), 0);
+      const usdt = Math.floor(Math.min(free, m.capital - used, m.capital / m.maxPositions) * 100) / 100;
+      if (usdt >= 5) {
+        try {
+          const pick = await scanAndPick({ targetPct: m.targetPct, days: m.days, pnlPct: +pnl.toFixed(2), daysLeft: Math.ceil((m.endsAt - Date.now()) / 86400000) }, open.map((x) => x.instId));
+          if (pick && pick.pick) {
+            const base = pick.pick.split("-")[0];
+            const log = await openPosition(base, base + "-USD", pick, usdt, { mission: true, source: "mission" });
+            if (log.fill) addEvent(tt.missionBought(base, usdt, pick));
+          }
+        } catch (e) { /* retry next cycle */ }
+      }
+      return;
+    }
+    setMission(cur);
+  };
+
+  const okxProps = { okx, okxCreds, setOkxCreds, okxCfg, setOkxCfg, okxTrades, setOkxTrades, okxBal, refreshBal, okxEvents, addEvent,
+    mission, startMission, stopMission, scanAndPick, openPosition, closeOpen };
+
+  // Live OKX balance (every 60 s) + AI trade manager (every 5 min) while the app is open.
   useEffect(() => {
     if (!okx) { setOkxBal(null); return; }
     let stop = false;
@@ -583,6 +734,7 @@ export default function App() {
           }
         } catch (e) { /* keep the existing OCO; try again next cycle */ }
       }
+      if (!stop && missionCycleRef.current) await missionCycleRef.current();
     };
     manage();
     const balTimer = setInterval(refreshBal, 60000), mgrTimer = setInterval(manage, 300000);
@@ -596,6 +748,7 @@ export default function App() {
     setOkxCfgState(await store.get("okxCfg", { pct: 10 }));
     setOkxTradesState(await store.get("okxTrades", []));
     setOkxEventsState(await store.get("okxEvents", []));
+    setMissionState(await store.get("mission", null));
     const pp = await store.get("paper", null);
     if (pp) setPaperState(await runPaperBot(pp, strings(await store.get("lang", "darija")))); // bot catches up on news since last open
     const s = await store.get("sub", { trialStart: null, plan: null });
@@ -698,7 +851,8 @@ function Chat({ t, rtl, lang, seed, okxProps }) {
   const [busy, setBusy] = useState(false);
   const listRef = useRef(null);
   const actions = useRef({});
-  const { okx, okxCfg, okxTrades, setOkxTrades, refreshBal } = okxProps;
+  const { okx, okxCfg, okxTrades, setOkxTrades, refreshBal, okxBal, mission, startMission, stopMission, scanAndPick, openPosition, closeOpen } = okxProps;
+  const askLive = (text, label, fn) => { const id = "act" + Date.now(); actions.current[id] = fn; say(text + "\n\n" + t.chatConfirmLive, { action: { id, label } }); };
 
   const say = (text, extra) => setMsgs((m) => [...m.filter((x) => !x.pending), { id: "b" + Date.now() + Math.random(), me: false, text, ...extra }]);
   const okxFail = (e) => say(t.okxErr((e && e.code) || "network"));
@@ -758,17 +912,58 @@ function Chat({ t, rtl, lang, seed, okxProps }) {
     if (!q || busy) return;
     setInput(""); setBusy(true);
     setMsgs((m) => [...m, { id: "u" + Date.now(), me: true, text: q }, { id: "p" + Date.now(), me: false, pending: true, text: t.thinking }]);
-    if (/(trade|trad|ترايد|تريد|صفقة|buy|chri|شري|bi3|بيع|sell|\bsed|سد|close|achet|vend|khrej|خرج)/i.test(q)) {
-      let ti = null;
-      try { ti = await api("/intent", { method: "POST", body: JSON.stringify({ text: q }) }); } catch {}
-      if (ti && ti.intent) { await tradeCommand(ti); setBusy(false); return; }
-    }
-    let reply;
-    try { reply = (await api("/chat", { method: "POST", body: JSON.stringify({ text: q, lang }) })).reply; }
-    catch (e) { reply = e.code === "rate_limited" ? t.rateLimited : t.error; }
-    setMsgs((m) => [...m.filter((x) => !x.pending), { id: "b" + Date.now(), me: false, text: stripMd(reply) }]);
+    // Everything goes through Kim (the conversational agent): it understands Darija and decides the action.
+    const usdtFree = okxBal && okxBal.ccy.USDT ? okxBal.ccy.USDT.avail : null;
+    const ctx = { connected: !!okx, demo: okx ? okx.demo : null, balanceUsd: okxBal ? +okxBal.totalUsd.toFixed(2) : null, usdtFree: usdtFree != null ? +usdtFree.toFixed(2) : null,
+      openTrades: okxTrades.filter((x) => x.open && okx && x.demo === okx.demo).map((x) => ({ coin: x.instId, qty: x.qty, entry: x.fill && x.fill.avgPx, sl: x.sl, tp: x.tp, byMission: !!x.mission })),
+      mission: mission && mission.active ? { capital: mission.capital, targetPct: mission.targetPct, days: mission.days, pnlPct: +(mission.pnl || 0).toFixed(2), daysLeft: Math.max(0, Math.ceil((mission.endsAt - Date.now()) / 86400000)) } : null };
+    const history = msgs.filter((x) => !x.pending && x.id !== "hello").slice(-8).map((x) => ({ me: x.me, text: String(x.text).slice(0, 300) }));
+    let res;
+    try { res = await api("/agent", { method: "POST", body: JSON.stringify({ text: q, history, ctx, lang }) }); }
+    catch (e) { say(e.code === "rate_limited" ? t.rateLimited : t.error); setBusy(false); return; }
+    const a = res.action || { type: "none" };
+    const reply = stripMd(res.reply || "");
+    try {
+      if (a.type === "open" || a.type === "close") {
+        if (reply) say(reply);
+        await tradeCommand({ intent: a.type, asset: res.asset });
+      } else if (a.type === "close_all") {
+        if (reply) say(reply);
+        if (!okx) say(t.notConnected);
+        else if (!okxTrades.some((x) => x.open && x.demo === okx.demo)) say(t.chatNoOpenTrade("—"));
+        else if (okx.demo) { const n = await closeOpen(); say(t.chatClosed(n + " ✓")); }
+        else askLive(t.closeAllConfirm, t.closeTrade, async () => { try { const n = await closeOpen(); say(t.chatClosed(n + " ✓")); } catch (e) { okxFail(e); } });
+      } else if (a.type === "scan") {
+        if (reply) say(reply);
+        if (!okx) { say(t.notConnected); }
+        else {
+          setMsgs((m) => [...m, { id: "p" + Date.now(), me: false, pending: true, text: t.scanning }]);
+          const pick = await scanAndPick(null, []);
+          if (!pick || !pick.pick) say(t.scanNone(pick && pick.summary));
+          else {
+            const base = pick.pick.split("-")[0];
+            const b = await okx.balances().catch(() => null);
+            const usdt = b ? Math.floor(((b.ccy.USDT && b.ccy.USDT.avail) || 0) * (okxCfg.pct || 10)) / 100 : 0;
+            const id = "act" + Date.now();
+            actions.current[id] = async () => { try { const log = await openPosition(base, base + "-USD", pick, usdt, { source: "scan" }); say(log.error ? (log.error.startsWith("oco") ? t.ocoFailed : t.okxErr(log.error)) : t.done(log.qty, base, fmtPrice(log.fill.avgPx))); } catch (e) { okxFail(e); } };
+            say(t.scanFound(base, pick) + "\n\n" + t.planDisclaimer + (okx.demo ? "" : "\n\n" + t.liveWarn), usdt >= 5 ? { action: { id, label: t.buyIt(fmtMoney(usdt)) } } : undefined);
+          }
+        }
+      } else if (a.type === "start_mission") {
+        if (reply) say(reply);
+        if (!okx) say(t.notConnected);
+        else {
+          const go = async () => { try { const m = await startMission(a); say(t.missionStarted(m)); } catch (e) { okxFail(e); } };
+          if (okx.demo) await go(); else askLive(t.missionStarted({ ...a, capital: a.capitalUsdt || usdtFree || 0 }), t.missionStartBtn, go);
+        }
+      } else if (a.type === "stop_mission") {
+        stopMission(); say((reply ? reply + "\n\n" : "") + t.missionStopped);
+      } else {
+        say(reply || t.error);
+      }
+    } catch (e) { okxFail(e); }
     setBusy(false);
-  }, [busy, lang, t, okx, okxCfg, okxTrades]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [busy, lang, t, okx, okxCfg, okxTrades, okxBal, mission, msgs]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { if (seed && seed.q) send(seed.q); }, [seed]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setTimeout(() => listRef.current && listRef.current.scrollToEnd({ animated: true }), 50); }, [msgs]);
@@ -1168,7 +1363,7 @@ function TradePlan({ t, rtl, lang, asset, base, isCrypto, okx, okxCreds, okxCfg,
 
 
 // ------------------------------------------------------------------ Real OKX wallet (live balance) + AI manager activity
-function OkxWallet({ t, rtl, okx, okxBal, refreshBal, okxTrades, okxEvents }) {
+function OkxWallet({ t, rtl, okx, okxBal, refreshBal, okxTrades, okxEvents, mission, stopMission }) {
   const [busy, setBusy] = useState(false);
   const coins = okxBal ? Object.entries(okxBal.ccy).filter(([, v]) => v.eq > 0 && (v.usd >= 0.5 || v.eq >= 1)).sort((a, b) => b[1].usd - a[1].usd) : [];
   const open = okxTrades.filter((x) => x.open && x.demo === okx.demo);
@@ -1192,6 +1387,18 @@ function OkxWallet({ t, rtl, okx, okxBal, refreshBal, okxTrades, okxEvents }) {
         {open.map((tr) => (
           <Text key={tr.ts} style={[st.sub, { marginTop: 4 }, rtl && st.rtl]}>{tr.instId} · {fmtQty(tr.qty || 0)} @ {tr.fill ? fmtPrice(tr.fill.avgPx) : "—"}{tr.sl ? ` · SL ${tr.sl} · TP ${tr.tp}` : ""}</Text>
         ))}
+      </View>
+      <Text style={[st.label, { marginTop: 12 }, rtl && st.rtl]}>{t.missionTitle}</Text>
+      <View style={st.card}>
+        {mission && mission.active ? (
+          <View>
+            <Text style={[st.body, { marginTop: 0, fontWeight: "700" }, rtl && st.rtl]}>{t.missionLine(mission, mission.pnl || 0, Math.max(0, Math.ceil((mission.endsAt - Date.now()) / 86400000)))}</Text>
+            <View style={{ height: 8, backgroundColor: C.line, borderRadius: 4, marginTop: 10, overflow: "hidden" }}>
+              <View style={{ height: 8, width: `${Math.max(0, Math.min(100, ((mission.pnl || 0) / mission.targetPct) * 100))}%`, backgroundColor: (mission.pnl || 0) >= 0 ? C.green : C.red }} />
+            </View>
+            <Pressable style={[st.chip, { marginTop: 12, alignSelf: rtl ? "flex-end" : "flex-start" }]} onPress={stopMission}><Text style={[st.chipText, { color: C.red }]}>⏹️ {t.missionStop}</Text></Pressable>
+          </View>
+        ) : <Text style={[st.sub, rtl && st.rtl]}>{t.missionNone}</Text>}
       </View>
       <Text style={[st.label, { marginTop: 12 }, rtl && st.rtl]}>{t.managerTitle}</Text>
       <View style={st.card}>

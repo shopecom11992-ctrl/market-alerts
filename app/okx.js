@@ -225,3 +225,46 @@ export function isGone(bal, trade) {
   const eq = (bal.ccy[base] && bal.ccy[base].eq) || 0;
   return eq < (trade.qty || 0) * 0.5;
 }
+
+// ---------------------------------------------------------------- market scanner (public OKX data, runs on the phone)
+const STABLE = new Set(["USDC", "DAI", "FDUSD", "TUSD", "USDE", "PYUSD", "USDD", "EUR", "EURT", "USDP", "BUSD", "USTC", "UST", "XAUT", "PAXG", "WBTC", "STETH", "WETH", "USDG", "RLUSD"]);
+const sma = (a, n) => (a.length >= n ? a.slice(-n).reduce((s, x) => s + x, 0) / n : null);
+function rsi(closes, n = 14) {
+  if (closes.length <= n) return null;
+  let g = 0, l = 0;
+  for (let i = closes.length - n; i < closes.length; i++) { const d = closes[i] - closes[i - 1]; if (d > 0) g += d; else l -= d; }
+  return l === 0 ? 100 : 100 - 100 / (1 + g / l);
+}
+const r2 = (x, d = 2) => (x == null || !isFinite(x) ? null : +x.toFixed(d));
+
+export function scoreCandles(c) { // c: closes oldest -> newest (1h)
+  const last = c[c.length - 1], s20 = sma(c, 20), s50 = sma(c, 50), R = rsi(c);
+  let atr = 0; for (let i = c.length - 24; i < c.length; i++) atr += Math.abs(c[i] / c[i - 1] - 1); atr = (atr / 24) * 100;
+  const chg4h = (last / c[c.length - 5] - 1) * 100, hi = Math.max(...c.slice(-48)), lo = Math.min(...c.slice(-48));
+  let score = 0;
+  if (s20 && s50 && last > s20 && s20 > s50) score += 3; else if (s20 && last > s20) score += 1; else score -= 2;
+  if (R != null) { if (R >= 50 && R <= 68) score += 2; else if (R > 75) score -= 3; else if (R < 40) score -= 1; }
+  if (chg4h > 0 && chg4h < 6) score += 1; if (chg4h >= 8) score -= 1;
+  const fromHi = (hi / last - 1) * 100; if (fromHi > 1 && fromHi < 12) score += 1;
+  return { last, sma20: r2(s20, 8), sma50: r2(s50, 8), rsi14: r2(R, 1), chg4h: r2(chg4h), atrPct: r2(atr), high48h: hi, low48h: lo, score, closes12h: c.slice(-12).map((x) => +x.toPrecision(6)) };
+}
+
+export async function scanMarket(fetchImpl = fetch, { minVol = 3e6, max = 6 } = {}) {
+  const base = "https://www.okx.com";
+  const t = await fetchImpl(base + "/api/v5/market/tickers?instType=SPOT").then((r) => r.json());
+  const tick = (t.data || []).filter((x) => x.instId.endsWith("-USDT") && !STABLE.has(x.instId.split("-")[0]))
+    .map((x) => { const last = parseFloat(x.last), open = parseFloat(x.open24h); return { instId: x.instId, last, chg24: r2((last / open - 1) * 100), vol24: Math.round(parseFloat(x.volCcy24h) || 0) }; })
+    .filter((x) => x.last > 0 && x.vol24 >= minVol && x.chg24 > -4 && x.chg24 < 18)
+    .sort((a, b) => (b.chg24 + Math.log10(b.vol24) * 2) - (a.chg24 + Math.log10(a.vol24) * 2))
+    .slice(0, 14);
+  const out = [];
+  for (const x of tick) {
+    try {
+      const k = await fetchImpl(`${base}/api/v5/market/candles?instId=${x.instId}&bar=1H&limit=100`).then((r) => r.json());
+      const closes = (k.data || []).map((row) => parseFloat(row[4])).reverse();
+      if (closes.length < 60) continue;
+      out.push({ ...x, ...scoreCandles(closes), last: x.last });
+    } catch {}
+  }
+  return out.filter((x) => x.score >= 3).sort((a, b) => b.score - a.score || b.vol24 - a.vol24).slice(0, max);
+}
