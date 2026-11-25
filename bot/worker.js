@@ -187,11 +187,12 @@ export async function tradePlan(asset, env, lang = "darija") {
   if (!price) return { action: "wait", summary: M.noPrice, symbol: asset.symbol };
   const sys = PLAN_SYSTEM + "\n" + (PLAN_LANG[lang] || PLAN_LANG.darija);
   const user = "DATA:\n" + JSON.stringify(d, null, 1);
-  let raw;
-  try { raw = extractJSON(await gemini(env, sys, user, true, 700, env.AI ? Math.min(deadline - 12000, Date.now() + 9000) : deadline - 1500)); }
+  let raw; const dbg = [];
+  try { raw = extractJSON(await gemini(env, sys, user, false, 1500, env.AI ? Math.min(deadline - 9000, Date.now() + 14000) : deadline - 1500)); }
   catch (e) {
+    dbg.push(String(e && e.message).slice(0, 160));
     try { raw = extractJSON(await workersAI(env, sys, user, deadline - 500)); }
-    catch (e2) { return { action: "wait", summary: M.busy, symbol: asset.symbol, price, error: "ai_busy" }; }
+    catch (e2) { dbg.push(String(e2 && e2.message).slice(0, 160)); console.log("plan failed:", dbg.join(" | ")); return { action: "wait", summary: M.busy, symbol: asset.symbol, price, error: "ai_busy", dbg }; }
   }
   const v = validatePlan(raw || {}, price);
   if (v.rejected) v.summary = M.bad + (v.summary ? "\n\n" + v.summary : "");
