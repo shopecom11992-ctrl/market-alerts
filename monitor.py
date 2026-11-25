@@ -688,7 +688,8 @@ def run(cfg, state, dry=False, sender=send_whatsapp):
         except LLMError as e:
             log("analysis failed, sending short alert:", e)
             msg = format_fallback(c, t, cfg)
-        entry = {"title": c["title"], "ts": now_utc().isoformat(), "link": c["link"]}
+        entry = {"title": c["title"], "ts": now_utc().isoformat(), "link": c["link"],
+                 "msg": msg, "impact": t.get("impact"), "category": t.get("category")}  # full text for the mobile app
         if deliver(msg):
             state["alerts"].append(entry)
             state["stats"]["alerts"] += 1
