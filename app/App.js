@@ -273,8 +273,46 @@ function Alerts({ t, rtl }) {
 }
 
 // ------------------------------------------------------------------ Chat
+// Saved conversations (like ChatGPT): every chat is kept on the phone; "+" starts a new one, the list icon opens old ones.
+const MAX_CHATS = 40, MAX_MSGS = 120;
+const chatTitle = (msgs) => { const u = msgs.find((m) => m.me); return u ? String(u.text).slice(0, 48) : null; };
+
 function Chat({ t, rtl, lang, seed, okxProps }) {
-  const [msgs, setMsgs] = useState([{ id: "hello", me: false, text: t.chatHello }]);
+  const hello = () => [{ id: "hello", me: false, text: t.chatHello }];
+  const [msgs, setMsgs] = useState(hello);
+  const [chatId, setChatId] = useState(null);
+  const [chats, setChats] = useState([]);       // [{id, title, updatedAt, msgs}]
+  const [showHistory, setShowHistory] = useState(false);
+  const loaded = useRef(false);
+
+  useEffect(() => { (async () => {
+    const all = await store.get("chats", []);
+    const cur = await store.get("chatCur", null);
+    setChats(all);
+    const c = all.find((x) => x.id === cur);
+    const fromSeed = seed && seed.q && Date.now() - seed.at < 5000; // "analyse" from a coin page opens a fresh chat
+    if (c && !fromSeed) { setChatId(c.id); setMsgs(c.msgs.length ? c.msgs : hello()); } else setChatId("c" + Date.now());
+    loaded.current = true;
+  })(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Persist after every change (pending bubbles and one-tap buttons are not saved).
+  useEffect(() => {
+    if (!loaded.current || !chatId) return;
+    const clean = msgs.filter((m) => !m.pending && m.id !== "hello").map(({ action, ...m }) => m).slice(-MAX_MSGS);
+    if (!clean.length) return;
+    setChats((prev) => {
+      const next = [{ id: chatId, title: chatTitle(clean) || "…", updatedAt: Date.now(), msgs: clean }, ...prev.filter((x) => x.id !== chatId)].slice(0, MAX_CHATS);
+      store.set("chats", next); store.set("chatCur", chatId);
+      return next;
+    });
+  }, [msgs, chatId]);
+
+  const newChat = () => { if (busy) return; actions.current = {}; setChatId("c" + Date.now()); setMsgs(hello()); setShowHistory(false); store.set("chatCur", null); };
+  const openChat = (c) => { if (busy) return; actions.current = {}; setChatId(c.id); setMsgs(c.msgs.length ? c.msgs : hello()); setShowHistory(false); store.set("chatCur", c.id); };
+  const deleteChat = (id) => {
+    setChats((prev) => { const next = prev.filter((x) => x.id !== id); store.set("chats", next); return next; });
+    if (id === chatId) newChat();
+  };
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const listRef = useRef(null);
@@ -398,6 +436,30 @@ function Chat({ t, rtl, lang, seed, okxProps }) {
 
   return (
     <KeyboardAvoidingView style={st.fill} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={90}>
+      <View style={[st.row, rtl && st.rowRev, { justifyContent: "space-between", alignItems: "center", paddingHorizontal: 14, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: C.line }]}>
+        <Pressable onPress={() => setShowHistory(!showHistory)} style={[st.row, rtl && st.rowRev, { gap: 6, alignItems: "center" }]} accessibilityLabel={t.chatHistory}>
+          <Ionicons name={showHistory ? "close" : "time-outline"} size={22} color={C.accent} />
+          <Text style={st.link}>{t.chatHistory}</Text>
+        </Pressable>
+        <Pressable onPress={newChat} style={[st.row, rtl && st.rowRev, { gap: 6, alignItems: "center", backgroundColor: C.card2, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 }]} accessibilityLabel={t.newChat}>
+          <Ionicons name="create-outline" size={18} color={C.accent} />
+          <Text style={st.link}>{t.newChat}</Text>
+        </Pressable>
+      </View>
+      {showHistory ? (
+        <ScrollView style={st.fill} contentContainerStyle={{ padding: 14 }}>
+          {chats.length ? chats.map((c) => (
+            <Pressable key={c.id} onPress={() => openChat(c)} style={[st.card, st.row, rtl && st.rowRev, { alignItems: "center", gap: 10, marginBottom: 8, borderColor: c.id === chatId ? C.accent : C.line }]}>
+              <Ionicons name="chatbubble-ellipses-outline" size={20} color={C.sub} />
+              <View style={{ flex: 1 }}>
+                <Text numberOfLines={1} style={[st.body, { marginTop: 0, fontWeight: "700" }, rtl && st.rtl]}>{c.title}</Text>
+                <Text style={[st.sub, { fontSize: 12 }, rtl && st.rtl]}>{fmtTime(new Date(c.updatedAt).toISOString())} · {c.msgs.length}</Text>
+              </View>
+              <Pressable onPress={() => deleteChat(c.id)} hitSlop={10} accessibilityLabel={t.deleteChat}><Ionicons name="trash-outline" size={18} color={C.red} /></Pressable>
+            </Pressable>
+          )) : <Text style={st.empty}>{t.noChats}</Text>}
+        </ScrollView>
+      ) : (<>
       <FlatList
         ref={listRef}
         data={msgs}
@@ -423,6 +485,7 @@ function Chat({ t, rtl, lang, seed, okxProps }) {
           <Ionicons name="send" size={18} color="#04110F" style={rtl ? { transform: [{ scaleX: -1 }] } : null} />
         </Pressable>
       </View>
+      </>)}
     </KeyboardAvoidingView>
   );
 }

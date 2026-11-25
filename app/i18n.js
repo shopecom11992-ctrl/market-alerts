@@ -149,6 +149,7 @@ const S = {
 // OKX connection + AI trade plan strings
 const X = {
   darija: {
+    newChat: "شات جديد", chatHistory: "الشاتات", noChats: "باقي ما كاين حتى شات محفوظ.", deleteChat: "مسح الشات",
     missionTitle: "🎯 المهمة ديال البوت", missionStop: "وقف المهمة", missionNone: "ما كايناش مهمة. قول للبوت ف الشات مثلا: «عندي 93 USDT، شري وبيع بوحدك، بغيت 10% ف 7 أيام».",
     missionLine: (m, pnl, dl) => `الهدف +${m.targetPct}% ف ${m.days} أيام · دابا ${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}% · باقي ${dl} يوم · أقصى خسارة -${m.maxLossPct}% · رأس المال ${m.capital} USDT`,
     missionStarted: (m) => `🎯 بدات المهمة: ${m.capital} USDT، الهدف +${m.targetPct}% ف ${m.days} أيام، وكنوقف إلا وصلت الخسارة -${m.maxLossPct}%. غادي نقلب على أحسن coins ف OKX كل 15 دقيقة وندير الصفقات بوحدي (ملي التطبيق محلول).`,
@@ -185,6 +186,7 @@ const X = {
     okxErr: (c) => ({ insufficient_usdt: "الـUSDT ما كافيش ف OKX.", below_min_size: "المبلغ صغير بزاف على OKX.", plan_out_of_date: "الثمن تبدل بزاف، طلب خطة جديدة.", instrument_not_found: "هاد العملة ما كايناش ف OKX مقابل USDT.", nothing_to_sell: "ما كاين والو باش يتباع.", network: "مشكل ف الاتصال بـOKX.", "50113": "المفاتيح غالطين (Secret).", "50111": "API key غالط.", "50105": "Passphrase غالط.", "50101": "هاد المفتاح ماشي ديال هاد الوضع (Demo/Live).", "50119": "API key ما كاينش.", "51008": "الرصيد ما كافيش." }[c] || "خطأ من OKX: " + c),
   },
   ar: {
+    newChat: "محادثة جديدة", chatHistory: "المحادثات", noChats: "لا توجد محادثات محفوظة بعد.", deleteChat: "حذف المحادثة",
     missionTitle: "🎯 مهمة البوت", missionStop: "إيقاف المهمة", missionNone: "لا توجد مهمة. قل للبوت مثلًا: «لدي 93 USDT، اشترِ وبِع بنفسك، أريد 10% في 7 أيام».",
     missionLine: (m, pnl, dl) => `الهدف +${m.targetPct}% في ${m.days} أيام · الآن ${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}% · متبقٍ ${dl} يوم · أقصى خسارة -${m.maxLossPct}% · رأس المال ${m.capital} USDT`,
     missionStarted: (m) => `🎯 بدأت المهمة: ${m.capital} USDT، الهدف +${m.targetPct}% في ${m.days} أيام، وأتوقف إذا بلغت الخسارة -${m.maxLossPct}%. سأبحث عن أفضل العملات في OKX كل 15 دقيقة وأتداول بنفسي (عندما يكون التطبيق مفتوحًا).`,
@@ -221,6 +223,7 @@ const X = {
     okxErr: (c) => ({ insufficient_usdt: "رصيد USDT غير كافٍ في OKX.", below_min_size: "المبلغ أصغر من الحد الأدنى في OKX.", plan_out_of_date: "تغير السعر كثيرًا، اطلب خطة جديدة.", instrument_not_found: "هذه العملة غير متاحة مقابل USDT في OKX.", nothing_to_sell: "لا يوجد ما يُباع.", network: "مشكلة في الاتصال بـOKX.", "50113": "المفتاح السري غير صحيح.", "50111": "API key غير صحيح.", "50105": "Passphrase غير صحيح.", "50101": "هذا المفتاح لا يطابق الوضع (تجريبي/حقيقي).", "50119": "API key غير موجود.", "51008": "الرصيد غير كافٍ." }[c] || "خطأ من OKX: " + c),
   },
   fr: {
+    newChat: "Nouveau chat", chatHistory: "Historique", noChats: "Aucune conversation enregistrée.", deleteChat: "Supprimer",
     missionTitle: "🎯 Mission du bot", missionStop: "Arrêter la mission", missionNone: "Aucune mission. Dis au bot par ex. : « J'ai 93 USDT, achète et vends tout seul, je veux 10 % en 7 jours ».",
     missionLine: (m, pnl, dl) => `Objectif +${m.targetPct}% en ${m.days} j · actuel ${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}% · reste ${dl} j · perte max -${m.maxLossPct}% · capital ${m.capital} USDT`,
     missionStarted: (m) => `🎯 Mission lancée : ${m.capital} USDT, objectif +${m.targetPct}% en ${m.days} jours, arrêt si la perte atteint -${m.maxLossPct}%. Je scanne OKX toutes les 15 min et je trade seul (app ouverte).`,
@@ -257,6 +260,7 @@ const X = {
     okxErr: (c) => ({ insufficient_usdt: "USDT insuffisant sur OKX.", below_min_size: "Montant sous le minimum OKX.", plan_out_of_date: "Le prix a trop bougé, demande un nouveau plan.", instrument_not_found: "Paire USDT introuvable sur OKX.", nothing_to_sell: "Rien à vendre.", network: "Problème de connexion à OKX.", "50113": "Secret incorrect.", "50111": "API key incorrecte.", "50105": "Passphrase incorrecte.", "50101": "Clé ne correspond pas au mode (Démo/Réel).", "50119": "API key inexistante.", "51008": "Solde insuffisant." }[c] || "Erreur OKX : " + c),
   },
   en: {
+    newChat: "New chat", chatHistory: "Chats", noChats: "No saved chats yet.", deleteChat: "Delete chat",
     missionTitle: "🎯 Bot mission", missionStop: "Stop mission", missionNone: "No mission. Tell the bot e.g.: \"I have 93 USDT, buy and sell by yourself, I want 10% in 7 days\".",
     missionLine: (m, pnl, dl) => `Target +${m.targetPct}% in ${m.days} days · now ${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}% · ${dl} days left · max loss -${m.maxLossPct}% · capital ${m.capital} USDT`,
     missionStarted: (m) => `🎯 Mission started: ${m.capital} USDT, target +${m.targetPct}% in ${m.days} days, stopping if loss hits -${m.maxLossPct}%. I'll scan OKX every 15 min and trade by myself (while the app is open).`,
