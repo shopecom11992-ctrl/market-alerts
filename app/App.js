@@ -432,9 +432,13 @@ function Chat({ t, rtl, lang, seed, okxProps }) {
       waitingOrders: (okxPending || []).filter((p) => okx && p.demo === okx.demo).map((p) => ({ coin: p.instId, buyAt: p.entry, now: p.lastPx, usdt: p.usdt })),
       mission: mission && mission.active ? { capital: mission.capital, targetPct: mission.targetPct, days: mission.days, pnlPct: +(mission.pnl || 0).toFixed(2), daysLeft: Math.max(0, Math.ceil((mission.endsAt - Date.now()) / 86400000)) } : null };
     const history = msgs.filter((x) => !x.pending && x.id !== "hello").slice(-8).map((x) => ({ me: x.me, text: String(x.text).slice(0, 300) }));
+    // Progress text while Kim works, so the wait is never a silent spinner.
+    const steps = t.progress || [];
+    const timers = steps.map((txt, i) => setTimeout(() => setMsgs((m) => m.map((x) => (x.pending ? { ...x, text: txt } : x))), 3500 * (i + 1)));
     let res;
     try { res = await api("/agent", { method: "POST", body: JSON.stringify({ text: q, history, ctx, lang }) }); }
-    catch (e) { say(e.code === "rate_limited" ? t.rateLimited : t.error); setBusy(false); return; }
+    catch (e) { timers.forEach(clearTimeout); say(e.code === "rate_limited" ? t.rateLimited : t.error); setBusy(false); return; }
+    timers.forEach(clearTimeout);
     const a = res.action || { type: "none" };
     const reply = stripMd(res.reply || "");
     try {

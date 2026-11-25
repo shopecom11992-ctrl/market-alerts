@@ -162,6 +162,7 @@ const S = {
 // OKX connection + AI trade plan strings
 const X = {
   darija: {
+    progress: ["كنجمع الثمن والأخبار...", "كنحلل الشارت والمؤشرات...", "كنكتب ليك الجواب..."],
     pendingTitle: "⏳ أوامر كتسنى الثمن", noPending: "ما كاين حتى أمر كيتسنى.", cancelOrder: "لغي",
     pendingLine: (p, last) => `${p.instId.replace("-USDT", "")} · نشري ف ${p.entry} · دابا ${last ?? "…"}${last ? ` (باقي ${(((last - p.entry) / last) * 100).toFixed(2)}%)` : ""} · ${p.usdt} USDT · SL ${p.sl} · TP ${p.tp}`,
     pendingPlaced: (b, p) => `⏳ حطيت أمر شرا ف ${b}: غادي نشري ملي يهبط الثمن لـ ${p.entry} (−${p.distPct}% من دابا)، بـ ${p.usdt} USDT.\nSL ${p.stopLoss} · TP ${p.takeProfit} · كيبقى ${p.expiryHours} ساعة.\nالأمر كاين ف OKX 24/24، وتقدر تشوفو ولا تلغيه ف «المحفظة».\n\n${p.summary || ""}`,
@@ -205,6 +206,7 @@ const X = {
     okxErr: (c) => ({ insufficient_usdt: "الـUSDT ما كافيش ف OKX.", below_min_size: "المبلغ صغير بزاف على OKX.", plan_out_of_date: "الثمن تبدل بزاف، طلب خطة جديدة.", instrument_not_found: "هاد العملة ما كايناش ف OKX مقابل USDT.", nothing_to_sell: "ما كاين والو باش يتباع.", network: "مشكل ف الاتصال بـOKX.", "50113": "المفاتيح غالطين (Secret).", "50111": "API key غالط.", "50105": "Passphrase غالط.", "50101": "هاد المفتاح ماشي ديال هاد الوضع (Demo/Live).", "50119": "API key ما كاينش.", "51008": "الرصيد ما كافيش." }[c] || "خطأ من OKX: " + c),
   },
   ar: {
+    progress: ["أجمع السعر والأخبار...", "أحلل الرسم البياني والمؤشرات...", "أكتب لك الجواب..."],
     pendingTitle: "⏳ أوامر تنتظر السعر", noPending: "لا توجد أوامر منتظرة.", cancelOrder: "إلغاء",
     pendingLine: (p, last) => `${p.instId.replace("-USDT", "")} · شراء عند ${p.entry} · الآن ${last ?? "…"}${last ? ` (متبقٍ ${(((last - p.entry) / last) * 100).toFixed(2)}%)` : ""} · ${p.usdt} USDT · SL ${p.sl} · TP ${p.tp}`,
     pendingPlaced: (b, p) => `⏳ وضعت أمر شراء على ${b}: سأشتري عندما ينزل السعر إلى ${p.entry} (−${p.distPct}% من الآن)، بمبلغ ${p.usdt} USDT.\nSL ${p.stopLoss} · TP ${p.takeProfit} · صالح ${p.expiryHours} ساعة.\nالأمر في OKX على مدار الساعة، ويمكنك متابعته أو إلغاؤه من «المحفظة».\n\n${p.summary || ""}`,
@@ -248,6 +250,7 @@ const X = {
     okxErr: (c) => ({ insufficient_usdt: "رصيد USDT غير كافٍ في OKX.", below_min_size: "المبلغ أصغر من الحد الأدنى في OKX.", plan_out_of_date: "تغير السعر كثيرًا، اطلب خطة جديدة.", instrument_not_found: "هذه العملة غير متاحة مقابل USDT في OKX.", nothing_to_sell: "لا يوجد ما يُباع.", network: "مشكلة في الاتصال بـOKX.", "50113": "المفتاح السري غير صحيح.", "50111": "API key غير صحيح.", "50105": "Passphrase غير صحيح.", "50101": "هذا المفتاح لا يطابق الوضع (تجريبي/حقيقي).", "50119": "API key غير موجود.", "51008": "الرصيد غير كافٍ." }[c] || "خطأ من OKX: " + c),
   },
   fr: {
+    progress: ["Je récupère le prix et les news...", "J'analyse le graphique...", "J'écris la réponse..."],
     pendingTitle: "⏳ Ordres en attente", noPending: "Aucun ordre en attente.", cancelOrder: "Annuler",
     pendingLine: (p, last) => `${p.instId.replace("-USDT", "")} · achat à ${p.entry} · actuel ${last ?? "…"}${last ? ` (reste ${(((last - p.entry) / last) * 100).toFixed(2)}%)` : ""} · ${p.usdt} USDT · SL ${p.sl} · TP ${p.tp}`,
     pendingPlaced: (b, p) => `⏳ Ordre d'achat placé sur ${b} : j'achète si le prix descend à ${p.entry} (−${p.distPct}%), pour ${p.usdt} USDT.\nSL ${p.stopLoss} · TP ${p.takeProfit} · valable ${p.expiryHours} h.\nL'ordre est sur OKX 24h/24 ; suis-le ou annule-le dans « Portefeuille ».\n\n${p.summary || ""}`,
@@ -291,6 +294,7 @@ const X = {
     okxErr: (c) => ({ insufficient_usdt: "USDT insuffisant sur OKX.", below_min_size: "Montant sous le minimum OKX.", plan_out_of_date: "Le prix a trop bougé, demande un nouveau plan.", instrument_not_found: "Paire USDT introuvable sur OKX.", nothing_to_sell: "Rien à vendre.", network: "Problème de connexion à OKX.", "50113": "Secret incorrect.", "50111": "API key incorrecte.", "50105": "Passphrase incorrecte.", "50101": "Clé ne correspond pas au mode (Démo/Réel).", "50119": "API key inexistante.", "51008": "Solde insuffisant." }[c] || "Erreur OKX : " + c),
   },
   en: {
+    progress: ["Fetching price and news...", "Reading the chart and indicators...", "Writing your answer..."],
     pendingTitle: "⏳ Orders waiting for price", noPending: "No waiting orders.", cancelOrder: "Cancel",
     pendingLine: (p, last) => `${p.instId.replace("-USDT", "")} · buy at ${p.entry} · now ${last ?? "…"}${last ? ` (${(((last - p.entry) / last) * 100).toFixed(2)}% away)` : ""} · ${p.usdt} USDT · SL ${p.sl} · TP ${p.tp}`,
     pendingPlaced: (b, p) => `⏳ Placed a buy order on ${b}: I'll buy if price drops to ${p.entry} (−${p.distPct}% from now), for ${p.usdt} USDT.\nSL ${p.stopLoss} · TP ${p.takeProfit} · valid ${p.expiryHours} h.\nThe order sits on OKX 24/7; track or cancel it in Portfolio.\n\n${p.summary || ""}`,
@@ -1113,9 +1117,13 @@ function Chat({ t, rtl, lang, seed, okxProps }) {
       waitingOrders: (okxPending || []).filter((p) => okx && p.demo === okx.demo).map((p) => ({ coin: p.instId, buyAt: p.entry, now: p.lastPx, usdt: p.usdt })),
       mission: mission && mission.active ? { capital: mission.capital, targetPct: mission.targetPct, days: mission.days, pnlPct: +(mission.pnl || 0).toFixed(2), daysLeft: Math.max(0, Math.ceil((mission.endsAt - Date.now()) / 86400000)) } : null };
     const history = msgs.filter((x) => !x.pending && x.id !== "hello").slice(-8).map((x) => ({ me: x.me, text: String(x.text).slice(0, 300) }));
+    // Progress text while Kim works, so the wait is never a silent spinner.
+    const steps = t.progress || [];
+    const timers = steps.map((txt, i) => setTimeout(() => setMsgs((m) => m.map((x) => (x.pending ? { ...x, text: txt } : x))), 3500 * (i + 1)));
     let res;
     try { res = await api("/agent", { method: "POST", body: JSON.stringify({ text: q, history, ctx, lang }) }); }
-    catch (e) { say(e.code === "rate_limited" ? t.rateLimited : t.error); setBusy(false); return; }
+    catch (e) { timers.forEach(clearTimeout); say(e.code === "rate_limited" ? t.rateLimited : t.error); setBusy(false); return; }
+    timers.forEach(clearTimeout);
     const a = res.action || { type: "none" };
     const reply = stripMd(res.reply || "");
     try {
