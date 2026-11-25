@@ -48,6 +48,8 @@ const UA = { "User-Agent": "Mozilla/5.0 (MarketQABot)" };
 
 export default {
   async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+    if (url.pathname.startsWith("/api/")) return api(request, url, env);
     if (request.method === "GET") return new Response("market-qa-bot ok");
     if (request.method !== "POST") return new Response("method not allowed", { status: 405 });
     let body;
@@ -56,6 +58,79 @@ export default {
     if (msg) ctx.waitUntil(handle(msg, env).catch(e => console.log("handle error", e && e.stack || e)));
     return new Response("ok"); // answer Green-API immediately; work continues in background
   },
+};
+
+// ---------------------------------------------------------------- mobile app API (prototype)
+const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET,POST,OPTIONS", "Access-Control-Allow-Headers": "Content-Type,X-App" };
+const LANGS = ["darija", "ar", "fr", "en"];
+const HITS = new Map(); // naive per-IP limiter (per isolate) to protect the free AI quota
+
+function json(data, status = 200) {
+  return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json; charset=utf-8", ...CORS } });
+}
+
+function limited(ip, max = 30, windowMs = 10 * 60e3) {
+  const now = Date.now(), arr = (HITS.get(ip) || []).filter(t => now - t < windowMs);
+  arr.push(now); HITS.set(ip, arr);
+  if (HITS.size > 5000) HITS.clear();
+  return arr.length > max;
+}
+
+export async function api(request, url, env) {
+  if (request.method === "OPTIONS") return new Response(null, { headers: CORS });
+  if (!["kimmarket", "nabd"].includes(request.headers.get("X-App"))) return json({ error: "unauthorized" }, 401);
+  const ip = request.headers.get("CF-Connecting-IP") || "local";
+  try {
+    if (url.pathname === "/api/chat" && request.method === "POST") {
+      if (limited(ip)) return json({ error: "rate_limited" }, 429);
+      const b = await request.json().catch(() => ({}));
+      const text = String(b.text || "").trim().slice(0, 600);
+      const lang = LANGS.includes(b.lang) ? b.lang : "darija";
+      if (!text) return json({ error: "empty" }, 400);
+      return json({ reply: await answer(text, env, lang) });
+    }
+    if (url.pathname === "/api/resolve") {
+      const r = await resolveAsset(url.searchParams.get("q") || "");
+      return json({ asset: r });
+    }
+    if (url.pathname === "/api/quote") {
+      const syms = (url.searchParams.get("symbols") || "").split(",").map(s => s.trim().toUpperCase()).filter(s => /^[\^A-Z0-9.=\-]{1,20}$/.test(s)).slice(0, 15);
+      const out = await Promise.all(syms.map(async s => {
+        const p = await priceData(s, !s.endsWith("-USD"));
+        return { symbol: s, last: p.last ?? null, chg1d: p.chg1d ?? null, chg1m: p.chg1m ?? null, currency: p.currency || "USD", error: p.error || null };
+      }));
+      return json({ quotes: out });
+    }
+    if (url.pathname === "/api/alerts") {
+      const r = await fetch(env.STATE_URL || "https://raw.githubusercontent.com/shopecom11992-ctrl/market-alerts/main/state/state.json", { headers: UA, signal: AbortSignal.timeout(5000) });
+      const st = r.ok ? await r.json() : {};
+      const alerts = (st.alerts || []).filter(a => a.title).slice(-40).reverse()
+        .map(a => ({ title: a.title, link: a.link, ts: a.ts, msg: a.msg || null }));
+      return json({ alerts });
+    }
+    return json({ error: "not_found" }, 404);
+  } catch (e) {
+    console.log("api error", e && e.stack || e);
+    return json({ error: "server_error" }, 500);
+  }
+}
+
+// Same brain as the WhatsApp bot, returning the text instead of sending it.
+export async function answer(text, env, lang = "darija") {
+  const deadline = Date.now() + BUDGET_MS;
+  const intent = await understand(text, env, deadline);
+  if (intent.type === "chat" || !intent.assets || !intent.assets.length) {
+    return HELP[lang] && (!intent.reply || lang !== "darija") ? HELP[lang] : (intent.reply || HELP.darija);
+  }
+  const data = await Promise.all(intent.assets.slice(0, 2).map(gather));
+  return analyse(text, data, env, deadline, lang);
+}
+
+const HELP = {
+  darija: "صيفط ليا سمية سهم ولا عملة (مثلا: Nvidia، BTC، PEPE، واش مزيان نشري Tesla دابا؟) ونعطيك تحليل.",
+  ar: "أرسل اسم سهم أو عملة رقمية (مثلاً: Nvidia أو BTC أو هل Tesla مناسبة الآن؟) وسأعطيك تحليلاً.",
+  fr: "Envoie le nom d'une action ou d'une crypto (ex. : Nvidia, BTC, « Tesla, c'est le moment ? ») et je te donne une analyse.",
+  en: "Send me a stock or crypto name (e.g. Nvidia, BTC, \"is Tesla a buy now?\") and I'll give you an analysis.",
 };
 
 // ---------------------------------------------------------------- webhook filtering
@@ -295,7 +370,7 @@ async function coingeckoSearch(q) {
   } catch { return null; }
 }
 
-const ANALYSIS_SYSTEM = `You are a careful markets analyst replying on WhatsApp to a Moroccan trader, in Moroccan Darija (Arabic script). Keep tickers and technical terms in Latin letters (support, resistance, RSI, earnings, ETF...).
+const ANALYSIS_SYSTEM = `You are a careful markets analyst replying to a Moroccan trader, in Moroccan Darija (Arabic script). Keep tickers and technical terms in Latin letters (support, resistance, RSI, earnings, ETF...).
 You receive the user's question plus DATA (live prices + indicators from Yahoo/CoinGecko, coin stats, recent headlines from Yahoo Finance and Google News).
 If you have a Google Search tool, use it to check the latest news and upcoming catalysts for the asset (earnings date, product events, token unlocks, ETF/regulation news, macro) from reputable sources.
 Use ONLY facts from DATA or from your search results; never invent prices, dates, levels or facts. Prices and levels must come from DATA. If something is still unknown, say so.
@@ -312,26 +387,41 @@ Format (WhatsApp, <= 1300 characters, short lines, emojis as section markers):
 🧭 شنو تراقب قبل ما تقرر: 2-3 نقط (مثلا تأكيد الكسر، earnings، الفيد، حجم التداول)
 End with exactly: "ℹ️ هادا تحليل ماشي نصيحة شراء ولا بيع — القرار ديالك."`;
 
-async function analyse(question, data, env, deadline = Date.now() + 20000) {
+const LANG_RULE = {
+  darija: "",
+  ar: "\nIMPORTANT: Write the whole answer in Modern Standard Arabic (فصحى), not Darija. Translate the section labels and the final disclaimer to MSA (\"هذا تحليل وليس نصيحة شراء أو بيع — القرار لك.\").",
+  fr: "\nIMPORTANT: Write the whole answer in French. Translate the section labels and end with exactly: \"ℹ️ Ceci est une analyse, pas un conseil d'achat ou de vente — la décision t'appartient.\"",
+  en: "\nIMPORTANT: Write the whole answer in English. Translate the section labels and end with exactly: \"ℹ️ This is analysis, not a buy or sell recommendation — the decision is yours.\"",
+};
+const DISCLAIMER = { darija: "القرار ديالك", ar: "القرار لك", fr: "la décision t'appartient", en: "the decision is yours" };
+const DISCLAIMER_FULL = {
+  darija: "ℹ️ هادا تحليل ماشي نصيحة شراء ولا بيع — القرار ديالك.",
+  ar: "ℹ️ هذا تحليل وليس نصيحة شراء أو بيع — القرار لك.",
+  fr: "ℹ️ Ceci est une analyse, pas un conseil d'achat ou de vente — la décision t'appartient.",
+  en: "ℹ️ This is analysis, not a buy or sell recommendation — the decision is yours.",
+};
+
+async function analyse(question, data, env, deadline = Date.now() + 20000, lang = "darija") {
   const user = `QUESTION: ${question}\n\nDATA:\n${JSON.stringify(data, null, 1)}`;
+  const SYS = ANALYSIS_SYSTEM + (LANG_RULE[lang] || "");
   try {
     let t, sources = [];
     try {
       if (env.GOOGLE_SEARCH !== "1") throw new Error("google search grounding disabled");
-      const g = await geminiSearch(env, ANALYSIS_SYSTEM, user, deadline - 1500);
+      const g = await geminiSearch(env, SYS, user, deadline - 1500);
       t = g.text; sources = g.sources;
     } catch (e) {
       console.log("no search, plain analysis:", e && e.message);
-      try { t = await gemini(env, ANALYSIS_SYSTEM, user, false, 900, deadline - (env.AI ? 9000 : 1500)); }
+      try { t = await gemini(env, SYS, user, false, 900, deadline - (env.AI ? 9000 : 1500)); }
       catch (e2) {
         console.log("gemini busy -> Workers AI:", e2 && e2.message);
-        t = await workersAI(env, ANALYSIS_SYSTEM, user, deadline - 1000);
+        t = await workersAI(env, SYS, user, deadline - 1000);
       }
     }
     t = t.trim();
     if (!sources.length) sources = [...new Set(data.flatMap(d => [d.price && !d.price.error ? d.price.src : null, d.coin ? "CoinGecko" : null, ...(d.news || []).map(n => n.source)]))].filter(Boolean).slice(0, 6);
     if (sources.length) t += "\n\n🔗 المصادر: " + sources.join(" · ");
-    if (!t.includes("القرار ديالك")) t += "\n\nℹ️ هادا تحليل ماشي نصيحة شراء ولا بيع — القرار ديالك.";
+    if (!t.includes(DISCLAIMER[lang] || DISCLAIMER.darija)) t += "\n\n" + (DISCLAIMER_FULL[lang] || DISCLAIMER_FULL.darija);
     return t.slice(0, 3500);
   } catch (e) {
     console.log("analysis fallback:", e && e.message);

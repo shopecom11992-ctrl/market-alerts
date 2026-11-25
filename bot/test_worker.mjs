@@ -68,6 +68,7 @@ globalThis.fetch = async (url, opt = {}) => {
     market_data: { current_price: { usd: 0.0000160 }, market_cap: { usd: 6e9 }, total_volume: { usd: 8e8 }, ath: { usd: 0.0000284 }, ath_change_percentage: { usd: -43 } } });
   if (url.includes("stooq")) return new Response("Date,Open,High,Low,Close,Volume\n" + closes.map((c, i) => `2026-01-${i},${c},${c + 1},${c - 1},${c},1`).join("\n"));
   if (url.includes("news.google")) return new Response("<rss><item><title>Google headline</title><pubDate>Tue, 24 Nov 2026 10:00:00 GMT</pubDate></item></rss>");
+  if (url.includes("state/state.json")) return Response.json({ alerts: [{ title: "Old alert", ts: "2026-11-24T10:00:00Z", link: "https://x/1" }, { title: "Fed cuts rates", ts: "2026-11-25T10:00:00Z", link: "https://x/2", msg: "🔴 *الفيد نقص الفائدة*" }] });
   if (url.includes("greenapi")) { sent.push(JSON.parse(opt.body)); return Response.json({ idMessage: "X" }); }
   throw new Error("unexpected url " + url);
 };
@@ -175,6 +176,32 @@ m = await ask("nvidia");
 const took = Date.now() - t0;
 ok(m.length === 2 && m[1].includes("support") && took < 27000, `Gemini hang -> raw-numbers answer in ${Math.round(took / 1000)}s (<27s)`);
 geminiHang = false;
+
+// --- mobile app API
+const apiCall = async (path, opt = {}, hdr = { "X-App": "nabd" }) => {
+  const keep = setInterval(() => {}, 1000);
+  const r = await worker.fetch(new Request("https://x.workers.dev" + path, { ...opt, headers: { "Content-Type": "application/json", ...hdr } }), env, { waitUntil() {} });
+  clearInterval(keep);
+  return { status: r.status, body: await r.json().catch(() => null), cors: r.headers.get("Access-Control-Allow-Origin") };
+};
+let r = await apiCall("/api/chat", { method: "POST", body: JSON.stringify({ text: "nvidia", lang: "fr" }) }, {});
+ok(r.status === 401, "API rejects requests without the app header");
+calls.length = 0;
+r = await apiCall("/api/chat", { method: "POST", body: JSON.stringify({ text: "nvidia", lang: "fr" }) });
+const sysSent = calls.length;
+ok(r.status === 200 && r.body.reply.includes("la décision t'appartient") && r.cors === "*", "POST /api/chat answers in French with French disclaimer + CORS");
+r = await apiCall("/api/chat", { method: "POST", body: JSON.stringify({ text: "salam", lang: "en" }) });
+ok(r.body.reply.startsWith("Send me a stock"), "help reply in the user's language");
+r = await apiCall("/api/quote?symbols=NVDA,BTC-USD");
+ok(r.body.quotes.length === 2 && r.body.quotes[0].last === 160, "GET /api/quote returns prices for the watchlist");
+r = await apiCall("/api/resolve?q=rivian");
+ok(r.body.asset.symbol === "RIVN", "GET /api/resolve finds any ticker for the watchlist search");
+r = await apiCall("/api/alerts");
+ok(r.body.alerts[0].title === "Fed cuts rates" && r.body.alerts[0].msg.includes("الفيد"), "GET /api/alerts returns newest alerts first, with full Darija text");
+r = await apiCall("/api/nope");
+ok(r.status === 404, "unknown API path -> 404");
+const opt = await worker.fetch(new Request("https://x.workers.dev/api/chat", { method: "OPTIONS" }), env, { waitUntil() {} });
+ok(opt.headers.get("Access-Control-Allow-Headers").includes("X-App"), "CORS preflight allowed");
 
 // --- local symbol map
 ok(localSymbols("شنو كتقول على تسلا").symbols[0] === "TSLA", "Arabic 'تسلا' -> TSLA");
