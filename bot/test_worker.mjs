@@ -1,5 +1,5 @@
 // Offline tests for the WhatsApp Q&A worker: Gemini (+Google Search), Yahoo, CoinGecko, Google News and Green-API are mocked.
-import worker, { parseWebhook, summarize, localSymbols, resolveAsset, rankModels, candidateWords, nice, searchAssets, chartData, validatePlan } from "./worker.js";
+import worker, { parseWebhook, summarize, localSymbols, resolveAsset, rankModels, candidateWords, nice, searchAssets, chartData, validatePlan, validateManage, tradeIntent } from "./worker.js";
 import assert from "node:assert/strict";
 
 const env = { GEMINI_API_KEY: "g", GREENAPI_TOKEN: "t", GREENAPI_URL: "https://7107.api.greenapi.com",
@@ -39,6 +39,9 @@ globalThis.fetch = async (url, opt = {}) => {
         : /rivian/i.test(q) ? { type: "asset", queries: ["Rivian"] }
         : { type: "asset", queries: ["zzzz unknown"] };
       return Response.json({ candidates: [{ content: { parts: [{ text: JSON.stringify(out) }] } }] });
+    }
+    if (sys.startsWith("You manage an OPEN")) {
+      return Response.json({ candidates: [{ content: { parts: [{ text: JSON.stringify({ action: "tighten", newStopLoss: 155, reason: "حماية الربح" }) }] } }] });
     }
     if (sys.startsWith("You are a disciplined")) {
       return Response.json({ candidates: [{ content: { parts: [{ text: JSON.stringify({ action: "buy", entry: 1, stopLoss: 152, takeProfit: 175, timeframe: "days", confidence: "medium", summary: "خطة", reasons: ["a"], risks: ["b"] }) }] } }] });
@@ -221,6 +224,28 @@ ok(validatePlan({ action: "buy", stopLoss: 150, takeProfit: 165 }, 160).action =
 ok(validatePlan({ action: "wait" }, 160).action === "wait", "AI 'wait' stays wait");
 r = await apiCall("/api/plan", { method: "POST", body: JSON.stringify({ symbol: "<x>" }) });
 ok(r.status === 400, "plan rejects bad symbols");
+// --- chat trade intents + position manager
+let ti = await tradeIntent("dir trade f solana db");
+ok(ti.intent === "open" && ti.asset && ti.asset.symbol === "SOL-USD" && ti.asset.type === "crypto", "intent: 'dir trade f solana' -> open SOL");
+ti = await tradeIntent("دير ترايد ف البيتكوين");
+ok(ti.intent === "open" && ti.asset && ti.asset.symbol === "BTC-USD", "intent: Darija Arabic script -> open BTC");
+ti = await tradeIntent("bi3 BTC daba");
+ok(ti.intent === "close" && ti.asset && ti.asset.symbol === "BTC-USD", "intent: 'bi3 BTC' -> close BTC");
+ti = await tradeIntent("chno ra2yk f nvidia");
+ok(ti.intent === null, "normal question is not a trade command");
+ti = await tradeIntent("wach nchri nvidia daba?");
+ok(ti.intent === null, "'should I buy?' question is not an order");
+ti = await tradeIntent("dir trade");
+ok(ti.intent === "open" && ti.asset === null, "trade command without asset -> asset null");
+const pos = { entry: 150, stopLoss: 145, takeProfit: 170 };
+ok(validateManage({ action: "tighten", newStopLoss: 140 }, pos, 160).action === "hold", "manager can't lower stop-loss");
+ok(validateManage({ action: "tighten", newStopLoss: 159.5 }, pos, 160).action === "hold", "manager stop can't hug the price");
+ok(validateManage({ action: "tighten", newStopLoss: 155 }, pos, 160).newStopLoss === 155, "manager tightens stop");
+ok(validateManage({ action: "close" }, pos, 160).action === "close", "manager can close");
+r = await apiCall("/api/manage", { method: "POST", body: JSON.stringify({ symbol: "NVDA", entry: 150, stopLoss: 145, takeProfit: 175, lang: "darija" }) });
+ok(r.body.review.action === "tighten" && r.body.review.newStopLoss === 155, "POST /api/manage returns validated review");
+r = await apiCall("/api/intent", { method: "POST", body: JSON.stringify({ text: "dir trade f solana" }) });
+ok(r.body.intent === "open" && r.body.asset.symbol === "SOL-USD", "POST /api/intent");
 r = await apiCall("/api/nope");
 ok(r.status === 404, "unknown API path -> 404");
 const opt = await worker.fetch(new Request("https://x.workers.dev/api/chat", { method: "OPTIONS" }), env, { waitUntil() {} });

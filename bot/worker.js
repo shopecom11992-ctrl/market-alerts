@@ -89,6 +89,20 @@ export async function api(request, url, env) {
       if (!text) return json({ error: "empty" }, 400);
       return json({ reply: await answer(text, env, lang) });
     }
+    if (url.pathname === "/api/intent" && request.method === "POST") {
+      if (limited(ip)) return json({ error: "rate_limited" }, 429);
+      const b = await request.json().catch(() => ({}));
+      return json(await tradeIntent(String(b.text || "").slice(0, 300)));
+    }
+    if (url.pathname === "/api/manage" && request.method === "POST") {
+      if (limited(ip)) return json({ error: "rate_limited" }, 429);
+      const b = await request.json().catch(() => ({}));
+      const lang = LANGS.includes(b.lang) ? b.lang : "darija";
+      const sym = String(b.symbol || "").toUpperCase().trim();
+      if (!/^[\^A-Z0-9.=\-]{1,20}$/.test(sym)) return json({ error: "bad_symbol" }, 400);
+      const n = (v) => parseFloat(v);
+      return json({ review: await managePosition({ symbol: sym, name: String(b.name || sym).slice(0, 60), cgId: b.cgId || undefined }, { entry: n(b.entry), stopLoss: n(b.stopLoss), takeProfit: n(b.takeProfit), openedAt: b.openedAt }, env, lang) });
+    }
     if (url.pathname === "/api/plan" && request.method === "POST") {
       if (limited(ip)) return json({ error: "rate_limited" }, 429);
       const b = await request.json().catch(() => ({}));
@@ -197,6 +211,56 @@ export async function tradePlan(asset, env, lang = "darija") {
   const v = validatePlan(raw || {}, price);
   if (v.rejected) v.summary = M.bad + (v.summary ? "\n\n" + v.summary : "");
   return { ...v, symbol: asset.symbol, name: asset.name, price, currency: (d.price && d.price.currency) || "USD", indicators: { sma20: d.price.sma20, sma50: d.price.sma50, rsi14: d.price.rsi14, support20: d.price.support20, resistance20: d.price.resistance20 } };
+}
+
+// ---------------------------------------------------------------- chat trade commands ("dir trade f SOL", "bi3 BTC")
+const TRADE_RE = /(\b(dir|ndir|dire|7el|7al|ft7|fta7|open|place|make|execute|take|go)\b[^\n]{0,15}\b(trade|trad|position|ordre|order)\b)|(دير|نفذ|افتح|فتح|حل|دخل)[^\n]{0,15}(ترايد|تريد|صفقة|trade)|\b(buy|achete|acheter|chri|chrili|ychri)\b|(شري|اشري|شريلي|إشتري|اشتري)/i;
+const CLOSE_RE = /\b(bi3|bi3o|ba3|sell|vend|vendre|close|sed|sedd|sd|sedha|khrej|exit)\b|(بيع|بيعو|بيعها|سد|سدها|سد الصفقة|خرج|اخرج|اغلق|أغلق)/i;
+const TRADE_STOP = new Set(["dir", "ndir", "dire", "trade", "trad", "position", "order", "ordre", "open", "place", "make", "execute", "take", "buy", "sell", "chri", "chrili", "ychri", "bi3", "bi3o", "close", "sed", "sedd", "exit", "khrej", "db", "daba", "now", "f", "fi", "b", "bach", "ok", "wakha", "achete", "acheter", "vend", "vendre", "7el", "7al", "ft7", "fta7", "go"]);
+
+const QUESTION_RE = /[?؟]|\b(wach|wash|was|ach|chno|chnou|kifach|3lach|imta|should|would|can i|est-ce|faut-il|dois-je|why|what|how|when)\b|(واش|شنو|علاش|كيفاش|إمتى|امتى|هل|ماذا|لماذا|متى)/i;
+export async function tradeIntent(text) {
+  if (QUESTION_RE.test(text)) return { intent: null };
+  const close = CLOSE_RE.test(text), open = !close && TRADE_RE.test(text);
+  if (!open && !close) return { intent: null };
+  const intent = close ? "close" : "open";
+  const loc = localSymbols(text);
+  if (loc) { const sym = loc.symbols[0]; return { intent, asset: { symbol: sym, name: loc.names[sym], type: (loc.types[sym] || "").toLowerCase() === "cryptocurrency" ? "crypto" : "stock" } }; }
+  for (const w of candidateWords(text).filter((w) => !TRADE_STOP.has(w))) {
+    const a = await resolveAsset(w);
+    if (a) return { intent, asset: { ...a, type: a.type === "CRYPTOCURRENCY" ? "crypto" : "stock" } };
+  }
+  return { intent, asset: null };
+}
+
+// ---------------------------------------------------------------- AI position manager (only tightens risk or exits; never adds risk)
+const MANAGE_SYSTEM = `You manage an OPEN spot long position for a user. You get DATA (live price, indicators, headlines) and POSITION (entry, current stopLoss, takeProfit).
+Choose ONE: "hold" (keep as is), "tighten" (raise the stop-loss to protect profit or cut risk), or "close" (exit now at market: setup broken, trend reversed, or strongly negative news).
+Rules: never lower the stop-loss; a new stop-loss must be above the current one and at least 0.7% below the current price. Prefer "hold" when nothing important changed. Use ONLY facts from DATA.
+Return ONLY JSON: {"action":"hold"|"tighten"|"close","newStopLoss":number|null,"reason":"1-2 sentences"}`;
+
+export function validateManage(r, pos, price) {
+  const reason = String((r && r.reason) || "").slice(0, 400);
+  if (!r || !price) return { action: "hold", reason };
+  if (r.action === "close") return { action: "close", reason, price };
+  if (r.action === "tighten") {
+    const ns = parseFloat(r.newStopLoss);
+    if (isFinite(ns) && ns > pos.stopLoss && ns <= price * 0.993 && ns < pos.takeProfit) return { action: "tighten", newStopLoss: nice(ns), reason, price };
+  }
+  return { action: "hold", reason, price };
+}
+
+export async function managePosition(asset, pos, env, lang = "darija") {
+  const deadline = Date.now() + BUDGET_MS;
+  const d = await gather(asset);
+  const price = d.price && d.price.last;
+  if (!price || !(pos.stopLoss > 0)) return { action: "hold", reason: "", price: price || null };
+  const sys = MANAGE_SYSTEM + "\n" + (PLAN_LANG[lang] || PLAN_LANG.darija).replace("summary, reasons and risks", "reason");
+  const user = "POSITION:\n" + JSON.stringify({ ...pos, currentPrice: price, pnlPct: +((price / pos.entry - 1) * 100).toFixed(2) }) + "\n\nDATA:\n" + JSON.stringify(d, null, 1);
+  let raw;
+  try { raw = extractJSON(await gemini(env, sys, user, false, 800, env.AI ? Math.min(deadline - 9000, Date.now() + 14000) : deadline - 1500)); }
+  catch (e) { try { raw = extractJSON(await workersAI(env, sys, user, deadline - 500)); } catch (e2) { return { action: "hold", reason: "", price, error: "ai_busy" }; } }
+  return validateManage(raw, pos, price);
 }
 
 // ---------------------------------------------------------------- webhook filtering
