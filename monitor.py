@@ -490,8 +490,10 @@ Return ONLY this JSON object:
  "short_term": "<1-3 sentences Darija on possible next hours/days reaction and what to watch>",
  "confidence": "<high|medium|low>",
  "confidence_reason": "<short Darija: why (source reliability, confirmed by N outlets, official statement, rumor...)>",
- "urgency": "<🔴|🟠>"
-}}"""
+ "urgency": "<🔴|🟠>",
+ "ideas": [{{"symbol": "<Yahoo Finance ticker of a liquid asset clearly and directly affected, e.g. BTC-USD, ETH-USD, SOL-USD, NVDA, AAPL, ^GSPC, ^IXIC, GC=F, CL=F>", "direction": "<up|down>"}}]
+}}
+"ideas": 0-3 items, only when the likely short-term direction is reasonably clear from the news; otherwise an empty list. Never invent tickers."""
 
 
 def triage(cands, state, cfg):
@@ -513,6 +515,19 @@ def analyse(c, tri, cfg):
             f"Summary: {c['summary'] or '(none)'}\nAlso reported by: {corrob}\n"
             f"Editor category: {tri.get('category')} | impact {tri.get('impact')}/10 | {tri.get('reason')}")
     return extract_json(llm(cfg, "analysis", ANALYSIS_SYSTEM.format(script=script), user, max_tokens=900))
+
+
+def clean_ideas(raw):
+    """Validated [{symbol, direction}] used by the app's paper-trading bot."""
+    out = []
+    for i in raw if isinstance(raw, list) else []:
+        if not isinstance(i, dict):
+            continue
+        sym = str(i.get("symbol", "")).upper().strip()
+        d = str(i.get("direction", "")).lower().strip()
+        if re.fullmatch(r"[\^A-Z0-9.=\-]{1,15}", sym) and d in ("up", "down") and not any(o["symbol"] == sym for o in out):
+            out.append({"symbol": sym, "direction": d})
+    return out[:3]
 
 
 # ----------------------------------------------------------------------------- formatting
@@ -683,13 +698,17 @@ def run(cfg, state, dry=False, sender=send_whatsapp):
     for _, _, _, c, t in picks:
         if recently_alerted(c["title"], state, cfg):  # two picks of same event
             continue
+        ideas = []
         try:
-            msg = format_alert(c, t, analyse(c, t, cfg), cfg)
+            a = analyse(c, t, cfg)
+            ideas = clean_ideas(a.get("ideas"))
+            msg = format_alert(c, t, a, cfg)
         except LLMError as e:
             log("analysis failed, sending short alert:", e)
             msg = format_fallback(c, t, cfg)
         entry = {"title": c["title"], "ts": now_utc().isoformat(), "link": c["link"],
-                 "msg": msg, "impact": t.get("impact"), "category": t.get("category")}  # full text for the mobile app
+                 "msg": msg, "impact": t.get("impact"), "category": t.get("category"),  # full text for the mobile app
+                 "ideas": ideas}
         if deliver(msg):
             state["alerts"].append(entry)
             state["stats"]["alerts"] += 1
