@@ -7,6 +7,7 @@ import {
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
+import Svg, { Defs, Line, LinearGradient, Path, Stop, Text as SvgText } from "react-native-svg";
 import { LANGS, isRTL, strings } from "./i18n";
 
 const API = "https://market-qa-bot.shopecom11992.workers.dev/api";
@@ -38,10 +39,14 @@ export default function App() {
   const [sub, setSub] = useState({ trialStart: null, plan: null }); // plan set = subscribed (simulated)
   const [showPaywall, setShowPaywall] = useState(false);
   const [chatSeed, setChatSeed] = useState(null);
+  const [paper, setPaperState] = useState(PAPER0());
+  const setPaper = (p) => { if (p) { setPaperState(p); store.set("paper", p); } };
   const t = strings(lang), rtl = isRTL(lang);
 
   useEffect(() => { (async () => {
     setLang(await store.get("lang", "darija"));
+    const pp = await store.get("paper", null);
+    if (pp) setPaperState(await runPaperBot(pp, strings(await store.get("lang", "darija")))); // bot catches up on news since last open
     const s = await store.get("sub", { trialStart: null, plan: null });
     setSub(s);
     if (!s.trialStart && !s.plan) setShowPaywall(true);
@@ -73,11 +78,12 @@ export default function App() {
       <View style={st.fill}>
         {tab === "alerts" && <Alerts t={t} rtl={rtl} />}
         {tab === "chat" && <Chat t={t} rtl={rtl} lang={lang} seed={chatSeed} />}
-        {tab === "watch" && <Watchlist t={t} rtl={rtl} onAnalyse={askAbout} />}
+        {tab === "markets" && <Markets t={t} rtl={rtl} onAnalyse={askAbout} paper={paper} setPaper={setPaper} />}
+        {tab === "portfolio" && <Portfolio t={t} rtl={rtl} paper={paper} setPaper={setPaper} />}
         {tab === "settings" && <Settings t={t} rtl={rtl} lang={lang} onLang={changeLang} sub={sub} daysLeft={daysLeft} onPlans={() => setShowPaywall(true)} />}
       </View>
       <View style={[st.tabs, rtl && st.rowRev]}>
-        {[["alerts", "notifications", t.tabAlerts], ["chat", "chatbubbles", t.tabChat], ["watch", "star", t.tabWatch], ["settings", "settings", t.tabSettings]].map(([k, icon, label]) => (
+        {[["alerts", "notifications", t.tabAlerts], ["chat", "chatbubbles", t.tabChat], ["markets", "stats-chart", t.tabMarkets], ["portfolio", "wallet", t.tabPortfolio], ["settings", "settings", t.tabSettings]].map(([k, icon, label]) => (
           <Pressable key={k} style={st.tab} onPress={() => setTab(k)} accessibilityRole="tab" accessibilityState={{ selected: tab === k }}>
             <Ionicons name={tab === k ? icon : icon + "-outline"} size={22} color={tab === k ? C.accent : C.sub} />
             <Text style={[st.tabText, tab === k && { color: C.accent }]}>{label}</Text>
@@ -185,75 +191,361 @@ function Chat({ t, rtl, lang, seed }) {
   );
 }
 
-// ------------------------------------------------------------------ Watchlist
-function Watchlist({ t, rtl, onAnalyse }) {
+// ------------------------------------------------------------------ Markets: search anything + watchlist
+const DEFAULT_WATCH = [{ symbol: "BTC-USD", name: "Bitcoin", type: "crypto", cgId: "bitcoin", base: "BTC" }, { symbol: "NVDA", name: "NVIDIA", type: "stock" }, { symbol: "GC=F", name: "Gold", type: "commodity" }];
+
+function Markets({ t, rtl, onAnalyse, paper, setPaper }) {
   const [list, setList] = useState([]);
   const [quotes, setQuotes] = useState({});
   const [q, setQ] = useState("");
-  const [adding, setAdding] = useState(false);
-  const [msg, setMsg] = useState(null);
+  const [results, setResults] = useState(null);
+  const [searching, setSearching] = useState(false);
+  const [asset, setAsset] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadQuotes = useCallback(async (l) => {
     if (!l.length) return;
     try { const r = await api("/quote?symbols=" + encodeURIComponent(l.map((a) => a.symbol).join(","))); const m = {}; (r.quotes || []).forEach((x) => { m[x.symbol] = x; }); setQuotes(m); } catch {}
   }, []);
-  useEffect(() => { (async () => {
-    const l = await store.get("watch", [{ symbol: "BTC-USD", name: "Bitcoin" }, { symbol: "NVDA", name: "NVIDIA" }, { symbol: "GC=F", name: "Gold" }]);
-    setList(l); loadQuotes(l);
-  })(); }, [loadQuotes]);
+  useEffect(() => { (async () => { const l = await store.get("watch", DEFAULT_WATCH); setList(l); loadQuotes(l); })(); }, [loadQuotes]);
 
-  const save = (l) => { setList(l); store.set("watch", l); };
-  const add = async () => {
-    const query = q.trim(); if (!query) return;
-    setAdding(true); setMsg(null);
-    try {
-      const r = await api("/resolve?q=" + encodeURIComponent(query));
-      if (!r.asset) setMsg(t.notFound);
-      else if (!list.some((a) => a.symbol === r.asset.symbol)) { const l = [...list, { symbol: r.asset.symbol, name: r.asset.name }]; save(l); setQ(""); loadQuotes(l); }
-      else setQ("");
-    } catch { setMsg(t.error); }
-    setAdding(false);
+  const save = (l) => { setList(l); store.set("watch", l); loadQuotes(l); };
+  const toggleWatch = (a) => save(list.some((x) => x.symbol === a.symbol) ? list.filter((x) => x.symbol !== a.symbol) : [...list, a]);
+  const search = async () => {
+    const query = q.trim(); if (!query) { setResults(null); return; }
+    setSearching(true);
+    try { setResults((await api("/search?q=" + encodeURIComponent(query))).results || []); } catch { setResults([]); }
+    setSearching(false);
   };
-  const remove = (s) => save(list.filter((a) => a.symbol !== s));
   const refresh = async () => { setRefreshing(true); await loadQuotes(list); setRefreshing(false); };
+
+  if (asset) return <AssetView t={t} rtl={rtl} asset={asset} onBack={() => setAsset(null)} onAnalyse={onAnalyse}
+    inWatch={list.some((x) => x.symbol === asset.symbol)} onToggleWatch={() => toggleWatch(asset)} paper={paper} setPaper={setPaper} />;
 
   return (
     <FlatList
       data={list}
       keyExtractor={(a) => a.symbol}
       contentContainerStyle={{ padding: 14, paddingBottom: 30 }}
+      keyboardShouldPersistTaps="handled"
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={C.accent} />}
       ListHeaderComponent={<>
-        <Text style={[st.h1, rtl && st.rtl]}>{t.watchTitle}</Text>
-        <View style={[st.row, rtl && st.rowRev, { gap: 8, marginBottom: 6 }]}>
-          <TextInput style={[st.input, { flex: 1 }, rtl && st.rtl]} placeholder={t.watchSearch} placeholderTextColor={C.sub} value={q} onChangeText={setQ} onSubmitEditing={add} autoCapitalize="none" />
-          <Pressable style={st.btnSmall} onPress={add} disabled={adding}>{adding ? <ActivityIndicator color="#04110F" /> : <Text style={st.btnSmallText}>{t.add}</Text>}</Pressable>
+        <View style={[st.row, rtl && st.rowRev, { gap: 8, marginBottom: 10 }]}>
+          <TextInput style={[st.input, { flex: 1 }, rtl && st.rtl]} placeholder={t.searchPlaceholder} placeholderTextColor={C.sub} value={q}
+            onChangeText={(v) => { setQ(v); if (!v.trim()) setResults(null); }} onSubmitEditing={search} autoCapitalize="none" returnKeyType="search" />
+          <Pressable style={st.btnSmall} onPress={search} disabled={searching}>{searching ? <ActivityIndicator color="#04110F" /> : <Ionicons name="search" size={18} color="#04110F" />}</Pressable>
         </View>
-        {msg ? <Text style={[st.sub, { marginBottom: 8 }, rtl && st.rtl]}>{msg}</Text> : null}
+        {results && (
+          <View style={[st.card, { paddingVertical: 4 }]}>
+            {results.length === 0 ? <Text style={[st.sub, { padding: 10 }, rtl && st.rtl]}>{t.noResults}</Text> : results.map((r) => (
+              <Pressable key={r.symbol + (r.cgId || "")} style={[st.row, rtl && st.rowRev, st.resultRow]} onPress={() => setAsset(r)}>
+                <Text style={[st.typeTag, r.type === "crypto" && { color: C.amber }]}>{(t.types && t.types[r.type]) || r.type}</Text>
+                <View style={{ flex: 1, marginHorizontal: 10 }}>
+                  <Text style={[st.sym, { fontSize: 15 }, rtl && st.rtl]}>{r.symbol.replace(/\d*-USD$/, "")}{r.rank ? `  #${r.rank}` : ""}</Text>
+                  <Text style={[st.sub, rtl && st.rtl]} numberOfLines={1}>{r.name}{r.exchange ? ` · ${r.exchange}` : ""}</Text>
+                </View>
+                <Ionicons name={rtl ? "chevron-back" : "chevron-forward"} size={18} color={C.sub} />
+              </Pressable>
+            ))}
+          </View>
+        )}
+        <Text style={[st.h1, { fontSize: 18, marginTop: 6 }, rtl && st.rtl]}>{t.watchTitle}</Text>
       </>}
       ListEmptyComponent={<Text style={[st.empty, rtl && st.rtl]}>{t.watchEmpty}</Text>}
       renderItem={({ item }) => {
         const p = quotes[item.symbol] || {};
         const up = (p.chg1d || 0) >= 0;
         return (
-          <View style={[st.card, st.row, rtl && st.rowRev, { justifyContent: "space-between" }]}>
+          <Pressable style={[st.card, st.row, rtl && st.rowRev, { justifyContent: "space-between" }]} onPress={() => setAsset(item)}>
             <View style={{ flex: 1 }}>
-              <Text style={[st.sym, rtl && st.rtl]}>{item.symbol.replace("-USD", "")}</Text>
+              <Text style={[st.sym, rtl && st.rtl]}>{item.symbol.replace(/\d*-USD$/, "")}</Text>
               <Text style={[st.sub, rtl && st.rtl]} numberOfLines={1}>{item.name}</Text>
             </View>
             <View style={{ alignItems: "flex-end", marginHorizontal: 12 }}>
               <Text style={st.price}>{p.last != null ? fmtPrice(p.last) : "—"}</Text>
               {p.chg1d != null ? <Text style={{ color: up ? C.green : C.red, fontWeight: "600" }}>{up ? "▲" : "▼"} {Math.abs(p.chg1d).toFixed(2)}% <Text style={st.sub}>{t.today}</Text></Text> : null}
             </View>
-            <View style={{ gap: 6 }}>
-              <Pressable style={st.chip} onPress={() => onAnalyse(item.name && item.name !== item.symbol ? item.name : item.symbol)}><Text style={st.chipText}>{t.analyse}</Text></Pressable>
-              <Pressable onPress={() => remove(item.symbol)} accessibilityLabel={t.remove}><Text style={[st.sub, { textAlign: "center" }]}>✕</Text></Pressable>
-            </View>
-          </View>
+            <Ionicons name={rtl ? "chevron-back" : "chevron-forward"} size={18} color={C.sub} />
+          </Pressable>
         );
       }}
     />
+  );
+}
+
+// ------------------------------------------------------------------ Asset detail: chart, analyse, exchanges, paper trade
+const EXCHANGES = [
+  ["Binance", (b) => `https://www.binance.com/en/trade/${b}_USDT?type=spot`],
+  ["OKX", (b) => `https://www.okx.com/trade-spot/${b.toLowerCase()}-usdt`],
+  ["Coinbase", (b) => `https://www.coinbase.com/advanced-trade/spot/${b}-USD`],
+];
+
+function AssetView({ t, rtl, asset, onBack, onAnalyse, inWatch, onToggleWatch, paper, setPaper }) {
+  const [range, setRange] = useState("1mo");
+  const [chart, setChart] = useState(null);
+  const [amount, setAmount] = useState("500");
+  const [note, setNote] = useState(null);
+  const isCrypto = asset.type === "crypto" || /-USD$/.test(asset.symbol);
+  const base = asset.base || asset.symbol.replace(/\d*-USD$/, "");
+
+  useEffect(() => { let live = true; setChart(null);
+    api(`/chart?symbol=${encodeURIComponent(asset.symbol)}&range=${range}${asset.cgId ? "&cg=" + encodeURIComponent(asset.cgId) : ""}`)
+      .then((c) => live && setChart(c)).catch(() => live && setChart({ points: [] }));
+    return () => { live = false; };
+  }, [asset.symbol, asset.cgId, range]);
+
+  const pts = (chart && chart.points) || [];
+  const first = pts.length ? pts[0][1] : null, last = chart && chart.last != null ? chart.last : pts.length ? pts[pts.length - 1][1] : null;
+  const chg = first && last ? ((last / first) - 1) * 100 : null;
+  const pos = paper.positions[asset.symbol];
+
+  const trade = (side) => {
+    if (!last) return;
+    const r = side === "buy" ? paperBuy(paper, asset, last, parseFloat(amount) || 0, t.reasonManual) : paperSell(paper, asset.symbol, last, t.reasonManual);
+    if (r.error) { setNote(t.notEnoughCash); return; }
+    setPaper(r.paper); setNote(null);
+  };
+
+  return (
+    <ScrollView contentContainerStyle={{ padding: 14, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+      <Pressable onPress={onBack} style={[st.row, rtl && st.rowRev, { gap: 4, marginBottom: 8 }]}>
+        <Ionicons name={rtl ? "chevron-forward" : "chevron-back"} size={20} color={C.accent} /><Text style={st.link}>{t.back}</Text>
+      </Pressable>
+      <Text style={[st.h1, { marginBottom: 2 }, rtl && st.rtl]}>{asset.name}</Text>
+      <Text style={[st.sub, rtl && st.rtl]}>{asset.symbol} · {(t.types && t.types[asset.type]) || asset.type || ""}</Text>
+      <View style={[st.row, rtl && st.rowRev, { gap: 10, marginTop: 10, alignItems: "baseline" }]}>
+        <Text style={{ color: C.text, fontSize: 30, fontWeight: "900" }}>{last != null ? fmtPrice(last) : "—"}</Text>
+        {chg != null ? <Text style={{ color: chg >= 0 ? C.green : C.red, fontWeight: "800", fontSize: 16 }}>{chg >= 0 ? "▲" : "▼"} {Math.abs(chg).toFixed(2)}% · {t.ranges[range]}</Text> : null}
+      </View>
+      <View style={[st.card, { marginTop: 12, paddingHorizontal: 6 }]}>
+        {chart === null ? <View style={{ height: 200, justifyContent: "center" }}><ActivityIndicator color={C.accent} /></View>
+          : pts.length > 1 ? <LineChart points={pts} up={chg == null || chg >= 0} range={range} /> : <Text style={[st.empty, { marginTop: 70, height: 130 }]}>{t.chartNA}</Text>}
+        <View style={[st.row, { justifyContent: "center", gap: 8, marginTop: 6 }]}>
+          {["5d", "1mo", "3mo", "1y"].map((r) => (
+            <Pressable key={r} style={[st.chip, { paddingVertical: 5 }, range === r && st.chipOn]} onPress={() => setRange(r)}>
+              <Text style={[st.chipText, range === r && { color: "#04110F" }]}>{t.ranges[r]}</Text>
+            </Pressable>
+          ))}
+        </View>
+        {chart && chart.src ? <Text style={[st.sub, { textAlign: "center", marginTop: 6, fontSize: 11 }]}>{chart.src}</Text> : null}
+      </View>
+      <View style={[st.row, rtl && st.rowRev, { gap: 8, marginTop: 4 }]}>
+        <Pressable style={[st.cta, { flex: 1, marginTop: 0, paddingVertical: 12 }]} onPress={() => onAnalyse(asset.name && !/^[A-Z0-9.^=-]+$/.test(asset.name) ? asset.name : asset.symbol)}>
+          <Text style={[st.ctaText, { fontSize: 15 }]}>🤖 {t.analyse}</Text>
+        </Pressable>
+        <Pressable style={[st.chip, { paddingVertical: 12 }, inWatch && st.chipOn]} onPress={onToggleWatch}>
+          <Text style={[st.chipText, inWatch && { color: "#04110F" }]}>{inWatch ? t.inWatch : "⭐ " + t.addWatch}</Text>
+        </Pressable>
+      </View>
+      {isCrypto ? (
+        <View style={[st.card, { marginTop: 12 }]}>
+          <Text style={[st.label, rtl && st.rtl]}>{t.openIn}</Text>
+          <View style={[st.row, rtl && st.rowRev, { gap: 8, flexWrap: "wrap" }]}>
+            {EXCHANGES.map(([name, url]) => (
+              <Pressable key={name} style={st.exBtn} onPress={() => Linking.openURL(url(base))}><Text style={st.exText}>{name} ↗</Text></Pressable>
+            ))}
+          </View>
+          <Text style={[st.sub, { marginTop: 8, fontSize: 12 }, rtl && st.rtl]}>{t.openInNote}</Text>
+        </View>
+      ) : null}
+      <View style={[st.card, { marginTop: 12 }]}>
+        <Text style={[st.label, rtl && st.rtl]}>{t.pfTitle} · {t.cash}: ${fmtMoney(paper.cash)}</Text>
+        {pos ? <Text style={[st.body, { marginTop: 0, marginBottom: 8 }, rtl && st.rtl]}>{fmtQty(pos.qty)} @ {fmtPrice(pos.entry)} → {last ? pnlText(pos, last) : ""}</Text> : null}
+        <View style={[st.row, rtl && st.rowRev, { gap: 8 }]}>
+          <TextInput style={[st.input, { flex: 1 }]} keyboardType="numeric" value={amount} onChangeText={setAmount} placeholder={t.amountUsd} placeholderTextColor={C.sub} />
+          <Pressable style={[st.btnSmall, { backgroundColor: C.green }]} onPress={() => trade("buy")}><Text style={st.btnSmallText}>{t.paperBuy}</Text></Pressable>
+          {pos ? <Pressable style={[st.btnSmall, { backgroundColor: C.red }]} onPress={() => trade("sell")}><Text style={[st.btnSmallText, { color: "#fff" }]}>{t.paperSell}</Text></Pressable> : null}
+        </View>
+        {note ? <Text style={{ color: C.red, marginTop: 6 }}>{note}</Text> : null}
+      </View>
+    </ScrollView>
+  );
+}
+
+// Simple dependency-light line chart (react-native-svg)
+function LineChart({ points, up, range }) {
+  const [w, setW] = useState(0);
+  const H = 190, P = 8;
+  const ys = points.map((p) => p[1]);
+  const min = Math.min(...ys), max = Math.max(...ys), span = max - min || 1;
+  const t0 = points[0][0], t1 = points[points.length - 1][0], tspan = t1 - t0 || 1;
+  const X = (tt) => P + ((tt - t0) / tspan) * (w - 2 * P), Y = (v) => P + (1 - (v - min) / span) * (H - 2 * P - 14);
+  const d = w ? points.map((p, i) => `${i ? "L" : "M"}${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join(" ") : "";
+  const area = d ? `${d} L${X(t1).toFixed(1)},${H - 14} L${X(t0).toFixed(1)},${H - 14} Z` : "";
+  const col = up ? C.green : C.red;
+  const fmtD = (ms) => { const dt = new Date(ms); return range === "5d" ? `${dt.getDate()}/${dt.getMonth() + 1} ${dt.getHours()}h` : `${dt.getDate()}/${dt.getMonth() + 1}${range === "1y" ? "/" + String(dt.getFullYear()).slice(2) : ""}`; };
+  return (
+    <View onLayout={(e) => setW(e.nativeEvent.layout.width)} style={{ height: H }}>
+      {w ? (
+        <Svg width={w} height={H}>
+          <Defs><LinearGradient id="g" x1="0" y1="0" x2="0" y2="1"><Stop offset="0" stopColor={col} stopOpacity="0.28" /><Stop offset="1" stopColor={col} stopOpacity="0" /></LinearGradient></Defs>
+          <Line x1={P} x2={w - P} y1={Y(max)} y2={Y(max)} stroke={C.line} strokeDasharray="3,4" />
+          <Line x1={P} x2={w - P} y1={Y(min)} y2={Y(min)} stroke={C.line} strokeDasharray="3,4" />
+          <Path d={area} fill="url(#g)" />
+          <Path d={d} stroke={col} strokeWidth={2} fill="none" />
+          <SvgText x={w - P} y={Y(max) - 3} fill={C.sub} fontSize="10" textAnchor="end">{fmtPrice(max)}</SvgText>
+          <SvgText x={w - P} y={Y(min) + 11} fill={C.sub} fontSize="10" textAnchor="end">{fmtPrice(min)}</SvgText>
+          <SvgText x={P} y={H - 2} fill={C.sub} fontSize="10">{fmtD(t0)}</SvgText>
+          <SvgText x={w - P} y={H - 2} fill={C.sub} fontSize="10" textAnchor="end">{fmtD(t1)}</SvgText>
+        </Svg>
+      ) : null}
+    </View>
+  );
+}
+
+// ------------------------------------------------------------------ Paper trading (virtual money only)
+const PAPER0 = (cap = 10000) => ({ startCap: cap, cash: cap, positions: {}, history: [], bot: { on: false, pct: 5, sl: 5, tp: 10, since: null, lastTs: null } });
+
+function paperBuy(p, asset, price, usd, reason) {
+  usd = Math.min(usd, p.cash);
+  if (!(usd > 0) || !(price > 0)) return { error: "cash" };
+  const qty = usd / price, old = p.positions[asset.symbol];
+  const pos = old ? { ...old, qty: old.qty + qty, entry: (old.entry * old.qty + price * qty) / (old.qty + qty) }
+                  : { symbol: asset.symbol, name: asset.name || asset.symbol, qty, entry: price, ts: Date.now() };
+  return { paper: { ...p, cash: p.cash - usd, positions: { ...p.positions, [asset.symbol]: pos },
+    history: [{ side: "buy", symbol: asset.symbol, qty, price, usd, reason, ts: Date.now() }, ...p.history].slice(0, 200) } };
+}
+function paperSell(p, symbol, price, reason) {
+  const pos = p.positions[symbol];
+  if (!pos || !(price > 0)) return { error: "nopos" };
+  const usd = pos.qty * price, pnl = usd - pos.qty * pos.entry;
+  const positions = { ...p.positions }; delete positions[symbol];
+  return { paper: { ...p, cash: p.cash + usd, positions,
+    history: [{ side: "sell", symbol, qty: pos.qty, price, usd, pnl, reason, ts: Date.now() }, ...p.history].slice(0, 200) } };
+}
+
+// The auto-bot: follows the news ideas (up -> buy, down -> sell) and enforces stop-loss / take-profit.
+async function runPaperBot(p, t) {
+  if (!p.bot.on) return p;
+  let paper = p;
+  try {
+    const { alerts } = await api("/alerts");
+    const fresh = (alerts || []).filter((a) => a.ideas && a.ideas.length && new Date(a.ts).getTime() > Math.max(paper.bot.since || 0, paper.bot.lastTs || 0))
+      .sort((a, b) => new Date(a.ts) - new Date(b.ts));
+    const syms = new Set(Object.keys(paper.positions));
+    fresh.forEach((a) => a.ideas.forEach((i) => syms.add(i.symbol)));
+    const quotes = {};
+    if (syms.size) { const r = await api("/quote?symbols=" + encodeURIComponent([...syms].join(","))); (r.quotes || []).forEach((x) => { quotes[x.symbol] = x.last; }); }
+    for (const a of fresh) {
+      for (const i of a.ideas) {
+        const px = quotes[i.symbol]; if (!px) continue;
+        const why = `${t.reasonNews}: ${a.title.slice(0, 70)}`;
+        if (i.direction === "up" && !paper.positions[i.symbol]) {
+          const r = paperBuy(paper, { symbol: i.symbol, name: i.symbol }, px, paper.startCap * (paper.bot.pct / 100), why); if (r.paper) paper = r.paper;
+        } else if (i.direction === "down" && paper.positions[i.symbol]) {
+          const r = paperSell(paper, i.symbol, px, why); if (r.paper) paper = r.paper;
+        }
+      }
+      paper = { ...paper, bot: { ...paper.bot, lastTs: new Date(a.ts).getTime() } };
+    }
+    for (const sym of Object.keys(paper.positions)) {
+      const pos = paper.positions[sym], px = quotes[sym]; if (!px) continue;
+      const ch = (px / pos.entry - 1) * 100;
+      if (ch <= -paper.bot.sl) paper = paperSell(paper, sym, px, t.reasonSL).paper;
+      else if (ch >= paper.bot.tp) paper = paperSell(paper, sym, px, t.reasonTP).paper;
+    }
+  } catch {}
+  return paper;
+}
+
+function Portfolio({ t, rtl, paper, setPaper }) {
+  const [quotes, setQuotes] = useState({});
+  const [refreshing, setRefreshing] = useState(false);
+  const [capInput, setCapInput] = useState(String(paper.startCap));
+
+  const refresh = useCallback(async () => {
+    setRefreshing(true);
+    const p2 = await runPaperBot(paper, t);
+    if (p2 !== paper) setPaper(p2);
+    const syms = Object.keys(p2.positions);
+    if (syms.length) { try { const r = await api("/quote?symbols=" + encodeURIComponent(syms.join(","))); const m = {}; (r.quotes || []).forEach((x) => { m[x.symbol] = x.last; }); setQuotes(m); } catch {} }
+    setRefreshing(false);
+  }, [paper, setPaper, t]);
+  useEffect(() => { refresh(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const posVal = Object.values(paper.positions).reduce((s, p) => s + p.qty * (quotes[p.symbol] || p.entry), 0);
+  const equity = paper.cash + posVal, pnl = equity - paper.startCap;
+  const setBot = (k, v) => setPaper({ ...paper, bot: { ...paper.bot, [k]: v, ...(k === "on" && v ? { since: Date.now(), lastTs: null } : {}) } });
+  const num = (v, d) => { const n = parseFloat(String(v).replace(",", ".")); return isFinite(n) && n > 0 ? n : d; };
+
+  return (
+    <ScrollView contentContainerStyle={{ padding: 14, paddingBottom: 40 }} keyboardShouldPersistTaps="handled"
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={C.accent} />}>
+      <Text style={[st.h1, { marginBottom: 4 }, rtl && st.rtl]}>{t.pfTitle}</Text>
+      <Text style={[st.sub, { marginBottom: 12 }, rtl && st.rtl]}>{t.pfNote}</Text>
+      <View style={[st.card, st.row, rtl && st.rowRev, { justifyContent: "space-around" }]}>
+        <Stat label={t.equity} value={"$" + fmtMoney(equity)} />
+        <Stat label={t.pnl} value={(pnl >= 0 ? "+" : "") + "$" + fmtMoney(pnl)} color={pnl >= 0 ? C.green : C.red} sub={((pnl / paper.startCap) * 100).toFixed(2) + "%"} />
+        <Stat label={t.cash} value={"$" + fmtMoney(paper.cash)} />
+      </View>
+
+      <View style={st.card}>
+        <View style={[st.row, rtl && st.rowRev, { justifyContent: "space-between" }]}>
+          <Text style={[st.planName, { fontSize: 16 }]}>{t.botTitle}</Text>
+          <Pressable style={[st.chip, paper.bot.on && st.chipOn]} onPress={() => setBot("on", !paper.bot.on)}>
+            <Text style={[st.chipText, paper.bot.on && { color: "#04110F" }]}>{paper.bot.on ? t.botOn : t.botOff}</Text>
+          </Pressable>
+        </View>
+        <Text style={[st.sub, { marginTop: 6 }, rtl && st.rtl]}>{t.botDesc}</Text>
+        {[["pct", t.perTrade], ["sl", t.sl], ["tp", t.tp]].map(([k, label]) => (
+          <View key={k} style={[st.row, rtl && st.rowRev, { justifyContent: "space-between", marginTop: 8 }]}>
+            <Text style={st.body}>{label}</Text>
+            <TextInput style={[st.input, { flex: 0, width: 80, textAlign: "center" }]} keyboardType="numeric" defaultValue={String(paper.bot[k])}
+              onEndEditing={(e) => setBot(k, Math.min(100, num(e.nativeEvent.text, paper.bot[k])))} />
+          </View>
+        ))}
+      </View>
+
+      <Text style={[st.label, { marginTop: 8 }, rtl && st.rtl]}>{t.positions}</Text>
+      {Object.values(paper.positions).length === 0 ? <Text style={[st.sub, { marginBottom: 10 }, rtl && st.rtl]}>{t.noPositions}</Text> :
+        Object.values(paper.positions).map((p) => {
+          const px = quotes[p.symbol] || p.entry, v = p.qty * px, g = v - p.qty * p.entry;
+          return (
+            <View key={p.symbol} style={[st.card, st.row, rtl && st.rowRev, { justifyContent: "space-between" }]}>
+              <View style={{ flex: 1 }}>
+                <Text style={[st.sym, rtl && st.rtl]}>{p.symbol.replace(/\d*-USD$/, "")}</Text>
+                <Text style={[st.sub, rtl && st.rtl]}>{fmtQty(p.qty)} @ {fmtPrice(p.entry)}</Text>
+              </View>
+              <View style={{ alignItems: "flex-end", marginHorizontal: 10 }}>
+                <Text style={st.price}>${fmtMoney(v)}</Text>
+                <Text style={{ color: g >= 0 ? C.green : C.red, fontWeight: "700" }}>{g >= 0 ? "+" : ""}{fmtMoney(g)} ({((px / p.entry - 1) * 100).toFixed(2)}%)</Text>
+              </View>
+              <Pressable style={st.chip} onPress={() => setPaper(paperSell(paper, p.symbol, px, t.reasonManual).paper)}><Text style={st.chipText}>{t.close}</Text></Pressable>
+            </View>
+          );
+        })}
+
+      <Text style={[st.label, { marginTop: 8 }, rtl && st.rtl]}>{t.history}</Text>
+      {paper.history.slice(0, 30).map((h, i) => (
+        <View key={i} style={[st.histRow, rtl && st.rowRev]}>
+          <Text style={{ color: h.side === "buy" ? C.green : C.red, fontWeight: "800", width: 44 }}>{h.side === "buy" ? "BUY" : "SELL"}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={[st.body, { marginTop: 0, fontSize: 14 }, rtl && st.rtl]}>{h.symbol.replace(/\d*-USD$/, "")} · ${fmtMoney(h.usd)} @ {fmtPrice(h.price)}{h.pnl != null ? `  (${h.pnl >= 0 ? "+" : ""}${fmtMoney(h.pnl)})` : ""}</Text>
+            <Text style={[st.sub, { fontSize: 11 }, rtl && st.rtl]} numberOfLines={1}>{h.reason} · {new Date(h.ts).toLocaleString()}</Text>
+          </View>
+        </View>
+      ))}
+
+      <View style={[st.card, { marginTop: 14 }]}>
+        <Text style={[st.label, rtl && st.rtl]}>{t.startCap}</Text>
+        <View style={[st.row, rtl && st.rowRev, { gap: 8 }]}>
+          <TextInput style={[st.input, { flex: 1 }]} keyboardType="numeric" value={capInput} onChangeText={setCapInput} />
+          <Pressable style={[st.btnSmall, { backgroundColor: C.amber }]} onPress={() => setPaper({ ...PAPER0(num(capInput, 10000)), bot: { ...paper.bot, since: paper.bot.on ? Date.now() : null, lastTs: null } })}>
+            <Text style={st.btnSmallText}>{t.reset}</Text>
+          </Pressable>
+        </View>
+      </View>
+    </ScrollView>
+  );
+}
+
+function Stat({ label, value, color, sub }) {
+  return (
+    <View style={{ alignItems: "center" }}>
+      <Text style={st.sub}>{label}</Text>
+      <Text style={{ color: color || C.text, fontSize: 17, fontWeight: "900", marginTop: 2 }}>{value}</Text>
+      {sub ? <Text style={{ color: color || C.sub, fontSize: 12 }}>{sub}</Text> : null}
+    </View>
   );
 }
 
@@ -344,6 +636,9 @@ function fmtTime(ts) {
     return d.toLocaleDateString();
   } catch { return ""; }
 }
+function fmtMoney(x) { return (Math.round((x || 0) * 100) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function fmtQty(q) { return q >= 1 ? q.toFixed(4).replace(/\.?0+$/, "") : q.toPrecision(4); }
+function pnlText(pos, px) { const g = pos.qty * (px - pos.entry); return `${g >= 0 ? "+" : ""}$${fmtMoney(g)} (${((px / pos.entry - 1) * 100).toFixed(2)}%)`; }
 function fmtPrice(x) { return x >= 1000 ? x.toLocaleString(undefined, { maximumFractionDigits: 0 }) : x >= 1 ? x.toFixed(2) : String(x); }
 
 const st = StyleSheet.create({
@@ -382,6 +677,11 @@ const st = StyleSheet.create({
   tabs: { flexDirection: "row", borderTopWidth: 1, borderTopColor: C.line, backgroundColor: "#0D131A", paddingBottom: Platform.OS === "ios" ? 4 : 8, paddingTop: 6 },
   tab: { flex: 1, alignItems: "center", gap: 2 },
   tabText: { color: C.sub, fontSize: 11, fontWeight: "600" },
+  resultRow: { paddingVertical: 10, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: C.line },
+  typeTag: { color: C.accent, fontSize: 11, fontWeight: "800", borderWidth: 1, borderColor: C.line, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, minWidth: 54, textAlign: "center" },
+  exBtn: { backgroundColor: "#1E2633", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: C.amber },
+  exText: { color: C.amber, fontWeight: "800" },
+  histRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: C.line },
   langMini: { color: C.sub, fontSize: 12, marginRight: 8 },
   bigLogo: { fontSize: 54, textAlign: "center", marginTop: 10 },
   brand: { color: C.text, fontSize: 22, fontWeight: "900", textAlign: "center", marginTop: 4, letterSpacing: 0.5 },
