@@ -1,5 +1,5 @@
 // Offline tests for the WhatsApp Q&A worker: Gemini (+Google Search), Yahoo, CoinGecko, Google News and Green-API are mocked.
-import worker, { parseWebhook, summarize, localSymbols, resolveAsset, rankModels, candidateWords, nice, searchAssets, chartData, validatePlan, validateManage, tradeIntent } from "./worker.js";
+import worker, { parseWebhook, summarize, localSymbols, resolveAsset, rankModels, candidateWords, nice, searchAssets, chartData, validatePlan, validateManage, tradeIntent, cleanAction } from "./worker.js";
 import assert from "node:assert/strict";
 
 const env = { GEMINI_API_KEY: "g", GREENAPI_TOKEN: "t", GREENAPI_URL: "https://7107.api.greenapi.com",
@@ -39,6 +39,20 @@ globalThis.fetch = async (url, opt = {}) => {
         : /rivian/i.test(q) ? { type: "asset", queries: ["Rivian"] }
         : { type: "asset", queries: ["zzzz unknown"] };
       return Response.json({ candidates: [{ content: { parts: [{ text: JSON.stringify(out) }] } }] });
+    }
+    if (sys.startsWith('You are "Kim"')) {
+      const q = b.contents[0].parts[0].text.split("USER NOW:").pop();
+      const R = (o) => Response.json({ candidates: [{ content: { parts: [{ text: JSON.stringify(o) }] } }] });
+      if (/93 usdt/i.test(q)) return R({ reply: "واخا، غادي نخدم بـ 93 USDT. الهدف ديال 20% ف 7 أيام طموح بزاف…", action: { type: "start_mission", capitalUsdt: 93, targetPct: 20, days: 7, maxLossPct: null } });
+      if (/chri liya sol/i.test(q)) return R({ reply: "دابا نشوف SOL", action: { type: "open", symbol: "SOL" } });
+      if (/9aleb/i.test(q)) return R({ reply: "غادي نقلب", action: { type: "scan" } });
+      if (/ra2yk/i.test(q)) return R({ reply: "نشوف", action: { type: "analyze", query: "Rivian" } });
+      return R({ reply: "مرحبا! أنا Kim.", action: { type: "none" } });
+    }
+    if (sys.startsWith("You pick at most ONE")) {
+      const cs = JSON.parse(b.contents[0].parts[0].text.split("CANDIDATES:\n")[1].split("\n\nHEADLINES")[0]);
+      const c = cs[0];
+      return Response.json({ candidates: [{ content: { parts: [{ text: JSON.stringify({ pick: c.instId, stopLoss: c.last * 0.96, takeProfit: c.last * 1.08, timeframe: "days", confidence: "medium", summary: "ترند طالع", reasons: ["a"], risks: ["b"] }) }] } }] });
     }
     if (sys.startsWith("You manage an OPEN")) {
       return Response.json({ candidates: [{ content: { parts: [{ text: JSON.stringify({ action: "tighten", newStopLoss: 155, reason: "حماية الربح" }) }] } }] });
@@ -246,6 +260,21 @@ r = await apiCall("/api/manage", { method: "POST", body: JSON.stringify({ symbol
 ok(r.body.review.action === "tighten" && r.body.review.newStopLoss === 155, "POST /api/manage returns validated review");
 r = await apiCall("/api/intent", { method: "POST", body: JSON.stringify({ text: "dir trade f solana" }) });
 ok(r.body.intent === "open" && r.body.asset.symbol === "SOL-USD", "POST /api/intent");
+// --- conversational agent + coin picker
+r = await apiCall("/api/agent", { method: "POST", body: JSON.stringify({ text: "3andi 93 usdt f okx, chri w bi3 bohdk, bghit 20% f 7 iyam", ctx: { connected: true, usdtFree: 93 }, lang: "darija" }) });
+ok(r.body.action.type === "start_mission" && r.body.action.capitalUsdt === 93 && r.body.action.targetPct === 20 && r.body.action.days === 7 && r.body.action.maxLossPct === 10 && r.body.reply.length > 5, "agent: Darija mission request -> start_mission (default max loss 10%)");
+r = await apiCall("/api/agent", { method: "POST", body: JSON.stringify({ text: "chri liya sol db", history: [{ me: true, text: "salam" }, { me: false, text: "مرحبا" }] }) });
+ok(r.body.action.type === "open" && r.body.asset && r.body.asset.symbol === "SOL-USD", "agent: 'chri liya sol' -> open SOL-USD");
+r = await apiCall("/api/agent", { method: "POST", body: JSON.stringify({ text: "9aleb liya 3la coin mzyana" }) });
+ok(r.body.action.type === "scan", "agent: 'search me a good coin' -> scan");
+r = await apiCall("/api/agent", { method: "POST", body: JSON.stringify({ text: "salam kim" }) });
+ok(r.body.action.type === "none" && r.body.reply.includes("Kim"), "agent: small talk");
+ok(cleanAction({ type: "start_mission", targetPct: 500, days: 0, capitalUsdt: 93 }).targetPct === 10 && cleanAction({ type: "hack" }).type === "none" && cleanAction({ type: "open", symbol: "sol-usdt" }).symbol === "SOL", "cleanAction bounds + sanitises");
+const cands = [{ instId: "SUI-USDT", last: 2, chg24: 4, vol24: 9e7, sma20: 1.9, sma50: 1.8, rsi14: 61, chg4h: 1.2, atrPct: 0.8 }, { instId: "BAD-USDT", last: 1 }];
+r = await apiCall("/api/pick", { method: "POST", body: JSON.stringify({ candidates: cands, goal: { targetPct: 20, days: 7 }, lang: "darija" }) });
+ok(r.body.pick.pick === "SUI-USDT" && r.body.pick.entry === 2 && r.body.pick.slPct === 4 && r.body.pick.rr >= 1.5, "pick: validated coin pick from OKX scan");
+r = await apiCall("/api/pick", { method: "POST", body: JSON.stringify({ candidates: [{ instId: "<script>", last: 1 }] }) });
+ok(r.body.pick.pick === null, "pick: rejects junk candidates");
 r = await apiCall("/api/nope");
 ok(r.status === 404, "unknown API path -> 404");
 const opt = await worker.fetch(new Request("https://x.workers.dev/api/chat", { method: "OPTIONS" }), env, { waitUntil() {} });

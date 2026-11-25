@@ -89,6 +89,19 @@ export async function api(request, url, env) {
       if (!text) return json({ error: "empty" }, 400);
       return json({ reply: await answer(text, env, lang) });
     }
+    if (url.pathname === "/api/agent" && request.method === "POST") {
+      if (limited(ip)) return json({ error: "rate_limited" }, 429);
+      const b = await request.json().catch(() => ({}));
+      const lang = LANGS.includes(b.lang) ? b.lang : "darija";
+      return json(await agent(String(b.text || "").slice(0, 600), Array.isArray(b.history) ? b.history.slice(-8) : [], b.ctx || {}, env, lang));
+    }
+    if (url.pathname === "/api/pick" && request.method === "POST") {
+      if (limited(ip)) return json({ error: "rate_limited" }, 429);
+      const b = await request.json().catch(() => ({}));
+      const lang = LANGS.includes(b.lang) ? b.lang : "darija";
+      const cands = (Array.isArray(b.candidates) ? b.candidates : []).slice(0, 8).filter((c) => c && /^[A-Z0-9]{1,15}-USDT$/.test(c.instId) && c.last > 0);
+      return json({ pick: await pickCoin(cands, b.goal || null, env, lang) });
+    }
     if (url.pathname === "/api/intent" && request.method === "POST") {
       if (limited(ip)) return json({ error: "rate_limited" }, 429);
       const b = await request.json().catch(() => ({}));
@@ -261,6 +274,86 @@ export async function managePosition(asset, pos, env, lang = "darija") {
   try { raw = extractJSON(await gemini(env, sys, user, false, 800, env.AI ? Math.min(deadline - 9000, Date.now() + 14000) : deadline - 1500)); }
   catch (e) { try { raw = extractJSON(await workersAI(env, sys, user, deadline - 500)); } catch (e2) { return { action: "hold", reason: "", price, error: "ai_busy" }; } }
   return validateManage(raw, pos, price);
+}
+
+// ---------------------------------------------------------------- Conversational trading agent (understands Moroccan Darija)
+const AGENT_SYSTEM = `You are "Kim", the trading assistant inside the KimMarket.ai app. You talk with Moroccan users, mostly in Darija — written in Arabic script OR in Latin letters with numbers ("3arabizi": 3=ع, 7=ح, 9=ق, 2=ء, 5/kh=خ, gh=غ, ch=ش). You understand Darija perfectly, including French/English words mixed in.
+Darija hints: bghit/baghi=I want, chri/nchri/ychri=buy, bi3/nbi3=sell, sed/sedd=close, rba7/ribh=profit, khsara/khser=loss, flous=money, chhal=how much, db/daba=now, wach=is it/should, 3lach=why, kifach=how, imta=when, mzyan=good, khayb=bad, tla3=went up, hbet/tah=went down, coin/3omla=coin, fhmtini=you understand me, svp=please, yalah=go, wakha/ok=ok, bzaf/bzzf=a lot, chwiya=a little, 9alab/y9alb=search, l9it/l9a=found, nhar/iyam/jours=day(s), simana=week, chhar=month.
+The user is connected (or not) to their OKX account; the app can execute SPOT trades only (no leverage, no shorts, no deposits/withdrawals). CONTEXT gives balance, open trades and the active mission.
+Decide what the user wants and return ONLY JSON:
+{"reply":"your answer to show the user","action":{"type":"none"|"analyze"|"scan"|"open"|"close"|"close_all"|"start_mission"|"stop_mission","symbol":string|null,"query":string|null,"targetPct":number|null,"days":number|null,"maxLossPct":number|null,"capitalUsdt":number|null}}
+Action meanings:
+- "analyze": user asks about a coin/stock/market (opinion, should I buy, why it moved). Put the asset or question in "query". reply can be a short "let me check" line.
+- "scan": user asks you to find/search a good coin to buy now ("9aleb liya 3la coin mzyana").
+- "open": user explicitly orders to buy/open a trade now on a named coin ("chri liya SOL", "dir trade f BTC"). symbol = ticker like SOL.
+- "close": user orders to sell/close a named coin. "close_all": sell/close everything.
+- "start_mission": user gives you money/goal to trade by yourself (e.g. "3andi 93 usdt, chri w bi3 bohdk, bghit 20% f 7 iyam"). Fill capitalUsdt, targetPct, days; maxLossPct = what the user said, else 10.
+- "stop_mission": stop autonomous trading.
+- "none": greetings, small talk, questions about you/the app, status questions ("chhal rba7t?", "fin wsalti?") — answer them from CONTEXT.
+Rules for "reply": write like a friendly Moroccan talking (Darija in Arabic script, short, warm, clear; tickers in Latin letters). Never promise profits. If the user asks for a big/fast target (e.g. 20% in a week), accept the mission but say honestly it is ambitious, that you will not take crazy risks to force it, that every trade has a stop-loss, and that you stop if losses reach maxLossPct. If not connected to OKX and the action needs trading, tell them to connect OKX in Settings. Keep it under 90 words unless the user asks for detail.`;
+
+const AGENT_LANG = { darija: "Write \"reply\" in Moroccan Darija (Arabic script).", ar: "Write \"reply\" in Modern Standard Arabic.", fr: "Write \"reply\" in French.", en: "Write \"reply\" in English." };
+const ACTIONS = ["none", "analyze", "scan", "open", "close", "close_all", "start_mission", "stop_mission"];
+
+export function cleanAction(a) {
+  a = a && typeof a === "object" ? a : {};
+  const type = ACTIONS.includes(a.type) ? a.type : "none";
+  const num = (v, lo, hi, d) => { const n = parseFloat(v); return isFinite(n) && n >= lo && n <= hi ? n : d; };
+  const out = { type, symbol: a.symbol ? String(a.symbol).toUpperCase().replace(/[^A-Z0-9]/g, "").replace(/USDT$|USD$/, "").slice(0, 12) || null : null, query: a.query ? String(a.query).slice(0, 200) : null };
+  if (type === "start_mission") { out.targetPct = num(a.targetPct, 1, 100, 10); out.days = num(a.days, 1, 90, 7); out.maxLossPct = num(a.maxLossPct, 2, 50, 10); out.capitalUsdt = num(a.capitalUsdt, 5, 1e7, null); }
+  return out;
+}
+
+async function assetFor(sym) {
+  if (!sym) return null;
+  const loc = localSymbols(sym) || localSymbols(sym.toLowerCase());
+  if (loc) { const s0 = loc.symbols[0]; return { symbol: s0.endsWith("-USD") || !/^[A-Z]{2,6}$/.test(s0) ? s0 : s0 + "-USD", name: loc.names[s0], type: "crypto" }; }
+  return { symbol: sym + "-USD", name: sym, type: "crypto" };
+}
+
+export async function agent(text, history, ctx, env, lang = "darija") {
+  const deadline = Date.now() + BUDGET_MS;
+  const sys = AGENT_SYSTEM + "\n" + (AGENT_LANG[lang] || AGENT_LANG.darija);
+  const hist = history.map((h) => (h.me ? "USER: " : "KIM: ") + String(h.text || "").slice(0, 300)).join("\n");
+  const user = `CONTEXT: ${JSON.stringify(ctx).slice(0, 1500)}\n\nCONVERSATION SO FAR:\n${hist || "(none)"}\n\nUSER NOW: ${text}`;
+  let j = null;
+  try { j = extractJSON(await gemini(env, sys, user, true, 600, Math.min(deadline - 12000, Date.now() + 9000))); }
+  catch (e) { try { j = extractJSON(await workersAI(env, sys, user, Math.min(deadline - 9000, Date.now() + 8000))); } catch (e2) { j = null; } }
+  if (!j) { // AI down: rule-based fallback
+    const ti = await tradeIntent(text);
+    if (ti.intent) return { reply: "", action: { type: ti.intent === "close" ? "close" : "open", symbol: ti.asset ? ti.asset.symbol.replace(/-USD$/, "") : null }, asset: ti.asset };
+    return { reply: await answer(text, env, lang), action: { type: "analyze" } };
+  }
+  const action = cleanAction(j.action);
+  let reply = String(j.reply || "").slice(0, 1500);
+  if (action.type === "analyze") reply = await answer(action.query || text, env, lang);
+  const asset = (action.type === "open" || action.type === "close") ? await assetFor(action.symbol) : null;
+  return { reply, action, asset };
+}
+
+// ---------------------------------------------------------------- Pick the best coin from the app's OKX market scan
+const PICK_SYSTEM = `You pick at most ONE spot crypto trade (long only, no leverage) for the next hours/days from CANDIDATES scanned on OKX (1h candles: sma20, sma50, rsi14, chg4h %, chg24 %, 24h volume in USDT, atrPct = typical hourly move %, recent closes) plus HEADLINES.
+Prefer: clear uptrend (price > sma20 > sma50), RSI 50-70, strong volume, room to the next resistance, no bad news. Avoid coins that already pumped hard (RSI > 75 or chg24 > 15%) and falling knives.
+If nothing is clean, pick null. A user GOAL may be given: NEVER take extra risk to reach it.
+If you pick: stopLoss under recent support, 1.5% to 8% below "last" (use atrPct: at least ~2x atrPct); takeProfit with reward/risk >= 1.5.
+Return ONLY JSON: {"pick":"XXX-USDT"|null,"stopLoss":number|null,"takeProfit":number|null,"timeframe":"hours"|"days","confidence":"low"|"medium"|"high","summary":"2-3 sentences: why this coin","reasons":["short"],"risks":["short"]}`;
+
+export async function pickCoin(cands, goal, env, lang = "darija") {
+  if (!cands.length) return { pick: null, summary: "" };
+  const deadline = Date.now() + BUDGET_MS;
+  const top = cands.slice(0, 3);
+  const heads = await Promise.all(top.map((c) => headlines(c.instId.split("-")[0] + "-USD", c.instId.split("-")[0] + " crypto").then((h) => (h || []).slice(0, 3).map((n) => n.title)).catch(() => [])));
+  const H = {}; top.forEach((c, i) => { H[c.instId] = heads[i]; });
+  const sys = PICK_SYSTEM + "\n" + (PLAN_LANG[lang] || PLAN_LANG.darija);
+  const user = `GOAL: ${JSON.stringify(goal)}\n\nCANDIDATES:\n${JSON.stringify(cands)}\n\nHEADLINES:\n${JSON.stringify(H)}`;
+  let raw;
+  try { raw = extractJSON(await gemini(env, sys, user, false, 1200, env.AI ? Math.min(deadline - 9000, Date.now() + 14000) : deadline - 1500)); }
+  catch (e) { try { raw = extractJSON(await workersAI(env, sys, user, deadline - 500)); } catch (e2) { return { pick: null, error: "ai_busy", summary: (PLAN_MSG[lang] || PLAN_MSG.darija).busy }; } }
+  const c = raw && raw.pick && cands.find((x) => x.instId === String(raw.pick).toUpperCase());
+  if (!c) return { pick: null, summary: String((raw && raw.summary) || ""), reasons: raw && raw.reasons, risks: raw && raw.risks };
+  const v = validatePlan({ ...raw, action: "buy" }, c.last);
+  if (v.action !== "buy") return { pick: null, rejected: c.instId, summary: (PLAN_MSG[lang] || PLAN_MSG.darija).bad };
+  return { pick: c.instId, entry: c.last, stopLoss: v.stopLoss, takeProfit: v.takeProfit, slPct: v.slPct, tpPct: v.tpPct, rr: v.rr, timeframe: raw.timeframe, confidence: raw.confidence, summary: String(raw.summary || ""), reasons: v.reasons, risks: v.risks };
 }
 
 // ---------------------------------------------------------------- webhook filtering
