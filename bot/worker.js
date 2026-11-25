@@ -412,10 +412,10 @@ async function analyse(question, data, env, deadline = Date.now() + 20000, lang 
       t = g.text; sources = g.sources;
     } catch (e) {
       console.log("no search, plain analysis:", e && e.message);
-      try { t = await gemini(env, SYS, user, false, 900, deadline - (env.AI ? 9000 : 1500)); }
+      try { t = await gemini(env, SYS, user, false, 900, env.AI ? Math.min(deadline - 12000, Date.now() + 9000) : deadline - 1500); }
       catch (e2) {
         console.log("gemini busy -> Workers AI:", e2 && e2.message);
-        t = await workersAI(env, SYS, user, deadline - 1000);
+        t = await workersAI(env, SYS, user, deadline - 500);
       }
     }
     t = t.trim();
@@ -425,16 +425,24 @@ async function analyse(question, data, env, deadline = Date.now() + 20000, lang 
     return t.slice(0, 3500);
   } catch (e) {
     console.log("analysis fallback:", e && e.message);
+    const L = RAW[lang] || RAW.darija;
     const lines = data.map(d => {
       const p = d.price || {};
-      if (p.error) return `• ${d.symbol}: ما لقيتش الثمن دابا`;
-      const trend = p.sma20 && p.sma50 ? (p.last > p.sma20 && p.sma20 > p.sma50 ? "طالع 📈" : p.last < p.sma20 && p.sma20 < p.sma50 ? "هابط 📉" : "متردد ↔️") : "؟";
-      return `*${d.symbol}*: ${p.last} ${p.currency || ""}\nاليوم ${p.chg1d}% · سيمانة ${p.chg5d}% · شهر ${p.chg1m}%\nالاتجاه: ${trend} (SMA20 ${p.sma20} / SMA50 ${p.sma50})\nRSI14: ${p.rsi14}\nsupport ${p.support20} · resistance ${p.resistance20}` +
+      if (p.error) return `• ${d.symbol}: ${L.noPrice}`;
+      const trend = p.sma20 && p.sma50 ? (p.last > p.sma20 && p.sma20 > p.sma50 ? L.up : p.last < p.sma20 && p.sma20 < p.sma50 ? L.down : L.flat) : "?";
+      return `*${d.symbol}*: ${p.last} ${p.currency || ""}\n${L.day} ${p.chg1d}% · ${L.week} ${p.chg5d}% · ${L.month} ${p.chg1m}%\n${L.trend}: ${trend} (SMA20 ${p.sma20} / SMA50 ${p.sma50})\nRSI14: ${p.rsi14}\nsupport ${p.support20} · resistance ${p.resistance20}` +
              (d.news && d.news.length ? `\n📰 ${d.news.slice(0, 2).map(n => n.title).join("\n📰 ")}` : "");
     });
-    return `🤖 الأرقام (التحليل الكامل ما وصلش فالوقت، Gemini مشغول):\n\n${lines.join("\n\n")}\n\nℹ️ هادا ماشي نصيحة شراء ولا بيع — القرار ديالك.`;
+    return `🤖 ${L.head}\n\n${lines.join("\n\n")}\n\n${DISCLAIMER_FULL[lang] || DISCLAIMER_FULL.darija}`;
   }
 }
+
+const RAW = {
+  darija: { head: "الأرقام (التحليل الكامل ما وصلش فالوقت، الذكاء الاصطناعي مشغول):", noPrice: "ما لقيتش الثمن دابا", up: "طالع 📈", down: "هابط 📉", flat: "متردد ↔️", day: "اليوم", week: "سيمانة", month: "شهر", trend: "الاتجاه" },
+  ar: { head: "الأرقام (لم يكتمل التحليل في الوقت، الذكاء الاصطناعي مشغول):", noPrice: "السعر غير متاح الآن", up: "صاعد 📈", down: "هابط 📉", flat: "متذبذب ↔️", day: "اليوم", week: "أسبوع", month: "شهر", trend: "الاتجاه" },
+  fr: { head: "Les chiffres (l'analyse complète n'est pas arrivée à temps, l'IA est surchargée) :", noPrice: "prix indisponible", up: "haussière 📈", down: "baissière 📉", flat: "indécise ↔️", day: "Jour", week: "Semaine", month: "Mois", trend: "Tendance" },
+  en: { head: "The numbers (full analysis didn't arrive in time, the AI is busy):", noPrice: "price unavailable", up: "up 📈", down: "down 📉", flat: "sideways ↔️", day: "Day", week: "Week", month: "Month", trend: "Trend" },
+};
 
 // ---------------------------------------------------------------- market data
 export function summarize(symbol, closes, highs, lows, meta = {}) {
