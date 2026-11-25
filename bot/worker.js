@@ -311,11 +311,12 @@ const AGENT_SYSTEM = `You are "Kim", the trading assistant inside the KimMarket.
 Darija hints: bghit/baghi=I want, chri/nchri/ychri=buy, bi3/nbi3=sell, sed/sedd=close, rba7/ribh=profit, khsara/khser=loss, flous=money, chhal=how much, db/daba=now, wach=is it/should, 3lach=why, kifach=how, imta=when, mzyan=good, khayb=bad, tla3=went up, hbet/tah=went down, coin/3omla=coin, fhmtini=you understand me, svp=please, yalah=go, wakha/ok=ok, bzaf/bzzf=a lot, chwiya=a little, 9alab/y9alb=search, l9it/l9a=found, nhar/iyam/jours=day(s), simana=week, chhar=month.
 The user is connected (or not) to their OKX account; the app can execute SPOT trades only (no leverage, no shorts, no deposits/withdrawals). CONTEXT gives balance, open trades and the active mission.
 Decide what the user wants and return ONLY JSON:
-{"reply":"your answer to show the user","action":{"type":"none"|"analyze"|"scan"|"open"|"close"|"close_all"|"cancel_orders"|"start_mission"|"stop_mission","symbol":string|null,"when":"now"|"best"|null,"query":string|null,"targetPct":number|null,"days":number|null,"maxLossPct":number|null,"capitalUsdt":number|null}}
+{"reply":"your answer to show the user","action":{"type":"none"|"analyze"|"scan"|"open"|"close"|"close_all"|"cancel_orders"|"start_mission"|"stop_mission","symbol":string|null,"when":"now"|"best"|null,"fundFrom":string|null,"fundAll":boolean|null,"amountUsdt":number|null,"keep":[string],"query":string|null,"targetPct":number|null,"days":number|null,"maxLossPct":number|null,"capitalUsdt":number|null}}
 Action meanings:
 - "analyze": user asks about a coin/stock/market (opinion, should I buy, why it moved). Put the asset or question in "query". reply can be a short "let me check" line.
 - "scan": user asks you to find/search a good coin to buy now ("9aleb liya 3la coin mzyana").
 - "open": user orders to buy a named coin. symbol = ticker like SOL. "when": "now" if the user wants it immediately ("khodha db", "chriha daba", "direct", "f l7in") ; "best" if the user lets you pick the moment ("chof nta lw9t mzyan w chri", "tsna lprix mzyan", "chriha mli tkoun mzyana") or gives no timing.
+  Funding for "open": if the user says which coin to SELL to pay for it ("bi3 BTC w chri SOL", "b flous dyal BTC"), put that ticker in "fundFrom" (fundAll=true if they say all/kaml/kolchi). If the user says coins NOT to sell ("ma tbi3ch LINK", "khali LINK"), list them in "keep". If they give an amount to spend ("b 20 usdt"), put it in "amountUsdt". These instructions are IMPORTANT: a user saying "no, don't sell LINK, sell BTC" means fundFrom="BTC", keep=["LINK"].
 - "cancel_orders": cancel waiting (limit) buy orders ("lghi l'ordre", "ma bghitch nchri SOL", "w9ef dak l'ordre").
 - "close": user orders to sell/close a named coin. "close_all": sell/close everything.
 - "start_mission": user gives you money/goal to trade by yourself (e.g. "3andi 93 usdt, chri w bi3 bohdk, bghit 20% f 7 iyam"). Fill capitalUsdt, targetPct, days; maxLossPct = what the user said, else 10.
@@ -331,6 +332,14 @@ export function cleanAction(a) {
   const type = ACTIONS.includes(a.type) ? a.type : "none";
   const num = (v, lo, hi, d) => { const n = parseFloat(v); return isFinite(n) && n >= lo && n <= hi ? n : d; };
   const out = { type, symbol: a.symbol ? String(a.symbol).toUpperCase().replace(/[^A-Z0-9]/g, "").replace(/USDT$|USD$/, "").slice(0, 12) || null : null, query: a.query ? String(a.query).slice(0, 200) : null, when: a.when === "now" ? "now" : "best" };
+  const tk = (x) => String(x || "").toUpperCase().replace(/[^A-Z0-9]/g, "").replace(/USDT$|USD$/, "").slice(0, 12);
+  if (type === "open") {
+    out.fundFrom = a.fundFrom ? tk(a.fundFrom) || null : null;
+    out.fundAll = !!a.fundAll;
+    out.amountUsdt = num(a.amountUsdt, 1, 1e7, null);
+    out.keep = (Array.isArray(a.keep) ? a.keep : []).map(tk).filter(Boolean).slice(0, 10);
+    if (out.fundFrom && out.fundFrom === out.symbol) out.fundFrom = null;
+  }
   if (type === "start_mission") { out.targetPct = num(a.targetPct, 1, 100, 10); out.days = num(a.days, 1, 90, 7); out.maxLossPct = num(a.maxLossPct, 2, 50, 10); out.capitalUsdt = num(a.capitalUsdt, 5, 1e7, null); }
   return out;
 }

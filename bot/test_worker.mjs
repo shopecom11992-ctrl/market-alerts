@@ -44,6 +44,7 @@ globalThis.fetch = async (url, opt = {}) => {
       const q = b.contents[0].parts[0].text.split("USER NOW:").pop();
       const R = (o) => Response.json({ candidates: [{ content: { parts: [{ text: JSON.stringify(o) }] } }] });
       if (/93 usdt/i.test(q)) return R({ reply: "واخا، غادي نخدم بـ 93 USDT. الهدف ديال 20% ف 7 أيام طموح بزاف…", action: { type: "start_mission", capitalUsdt: 93, targetPct: 20, days: 7, maxLossPct: null } });
+      if (/no bi3 btc/i.test(q)) return R({ reply: "صافي", action: { type: "open", symbol: "SOL", when: "now", fundFrom: "btc", fundAll: true, keep: ["link"] } });
       if (/chri liya sol/i.test(q)) return R({ reply: "دابا نشوف SOL", action: { type: "open", symbol: "SOL" } });
       if (/9aleb/i.test(q)) return R({ reply: "غادي نقلب", action: { type: "scan" } });
       if (/ra2yk/i.test(q)) return R({ reply: "نشوف", action: { type: "analyze", query: "Rivian" } });
@@ -265,6 +266,8 @@ r = await apiCall("/api/agent", { method: "POST", body: JSON.stringify({ text: "
 ok(r.body.action.type === "start_mission" && r.body.action.capitalUsdt === 93 && r.body.action.targetPct === 20 && r.body.action.days === 7 && r.body.action.maxLossPct === 10 && r.body.reply.length > 5, "agent: Darija mission request -> start_mission (default max loss 10%)");
 r = await apiCall("/api/agent", { method: "POST", body: JSON.stringify({ text: "chri liya sol db", history: [{ me: true, text: "salam" }, { me: false, text: "مرحبا" }] }) });
 ok(r.body.action.type === "open" && r.body.asset && r.body.asset.symbol === "SOL-USD", "agent: 'chri liya sol' -> open SOL-USD");
+r = await apiCall("/api/agent", { method: "POST", body: JSON.stringify({ text: "No bi3 btc kaml wchriha hiya latbi3ch link" }) });
+ok(r.body.action.type === "open" && r.body.action.fundFrom === "BTC" && r.body.action.fundAll === true && r.body.action.keep[0] === "LINK" && r.body.action.when === "now", "agent: 'sell BTC (all), not LINK, buy SOL' -> fundFrom BTC, keep LINK");
 r = await apiCall("/api/agent", { method: "POST", body: JSON.stringify({ text: "9aleb liya 3la coin mzyana" }) });
 ok(r.body.action.type === "scan", "agent: 'search me a good coin' -> scan");
 r = await apiCall("/api/agent", { method: "POST", body: JSON.stringify({ text: "salam kim" }) });
