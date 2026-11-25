@@ -149,6 +149,7 @@ const S = {
 // OKX connection + AI trade plan strings
 const X = {
   darija: {
+    soldButBuyFailed: (sold, b, why) => `⚠️ بعت ${sold} والفلوس ولاو USDT ف الحساب ديالك (ما ضاعو)، ولكن الشرا ديال ${b} ما تداش:\n${why}`,
     progress: ["كنجمع الثمن والأخبار...", "كنحلل الشارت والمؤشرات...", "كنكتب ليك الجواب..."],
     pendingTitle: "⏳ أوامر كتسنى الثمن", noPending: "ما كاين حتى أمر كيتسنى.", cancelOrder: "لغي",
     pendingLine: (p, last) => `${p.instId.replace("-USDT", "")} · نشري ف ${p.entry} · دابا ${last ?? "…"}${last ? ` (باقي ${(((last - p.entry) / last) * 100).toFixed(2)}%)` : ""} · ${p.usdt} USDT · SL ${p.sl} · TP ${p.tp}`,
@@ -190,9 +191,10 @@ const X = {
     manualTitle: "تداول يدوي ف OKX", buyMarket: "شري (Market)", sellAll: "بيع", closeTrade: "سد الصفقة", trades: "الصفقات ديال KimMarket",
     notCryptoOkx: "التنفيذ ف OKX غير للكريبتو (spot). للأسهم استعمل المحفظة الوهمية.", tradeOpen: "مفتوحة", tradeClosed: "مسدودة",
     planDisclaimer: "هادي خطة من الذكاء الاصطناعي، ماشي نصيحة مالية ولا ضمان ديال الربح. نتا اللي كتقرر.",
-    okxErr: (c) => ({ insufficient_usdt: "الـUSDT ما كافيش ف OKX.", below_min_size: "المبلغ صغير بزاف على OKX.", plan_out_of_date: "الثمن تبدل بزاف، طلب خطة جديدة.", instrument_not_found: "هاد العملة ما كايناش ف OKX مقابل USDT.", nothing_to_sell: "ما كاين والو باش يتباع.", network: "مشكل ف الاتصال بـOKX.", "50113": "المفاتيح غالطين (Secret).", "50111": "API key غالط.", "50105": "Passphrase غالط.", "50101": "هاد المفتاح ماشي ديال هاد الوضع (Demo/Live).", "50119": "API key ما كاينش.", "51008": "الرصيد ما كافيش." }[c] || "خطأ من OKX: " + c),
+    okxErr: (c, b) => ({ "50123": `🚫 OKX ما كيخليكش تداول ${b || "هاد العملة"} من الحساب ديالك (قيود ديال البلاد على هاد العملة، ولا المفتاح ما فيهش صلاحية Trade ليها). ختار عملة أخرى.`, "50120": "🔑 المفتاح ديال API ما فيهش صلاحية Trade. ف OKX ← API، فعل Trade (بلا Withdraw) وعاود ربط.", insufficient_usdt: "الـUSDT ما كافيش ف OKX.", below_min_size: "المبلغ صغير بزاف على OKX.", plan_out_of_date: "الثمن تبدل بزاف، طلب خطة جديدة.", instrument_not_found: "هاد العملة ما كايناش ف OKX مقابل USDT.", nothing_to_sell: "ما كاين والو باش يتباع.", network: "مشكل ف الاتصال بـOKX.", "50113": "المفاتيح غالطين (Secret).", "50111": "API key غالط.", "50105": "Passphrase غالط.", "50101": "هاد المفتاح ماشي ديال هاد الوضع (Demo/Live).", "50119": "API key ما كاينش.", "51008": "الرصيد ما كافيش." }[c] || "خطأ من OKX: " + c),
   },
   ar: {
+    soldButBuyFailed: (sold, b, why) => `⚠️ بعت ${sold} وأصبح المبلغ USDT في حسابك (لم يضِع)، لكن شراء ${b} لم يتم:\n${why}`,
     progress: ["أجمع السعر والأخبار...", "أحلل الرسم البياني والمؤشرات...", "أكتب لك الجواب..."],
     pendingTitle: "⏳ أوامر تنتظر السعر", noPending: "لا توجد أوامر منتظرة.", cancelOrder: "إلغاء",
     pendingLine: (p, last) => `${p.instId.replace("-USDT", "")} · شراء عند ${p.entry} · الآن ${last ?? "…"}${last ? ` (متبقٍ ${(((last - p.entry) / last) * 100).toFixed(2)}%)` : ""} · ${p.usdt} USDT · SL ${p.sl} · TP ${p.tp}`,
@@ -234,9 +236,10 @@ const X = {
     manualTitle: "تداول يدوي في OKX", buyMarket: "شراء (Market)", sellAll: "بيع", closeTrade: "إغلاق الصفقة", trades: "صفقات KimMarket",
     notCryptoOkx: "التنفيذ في OKX للعملات الرقمية فقط (spot). للأسهم استخدم المحفظة الافتراضية.", tradeOpen: "مفتوحة", tradeClosed: "مغلقة",
     planDisclaimer: "هذه خطة من الذكاء الاصطناعي، وليست نصيحة مالية ولا ضمانًا للربح. القرار لك.",
-    okxErr: (c) => ({ insufficient_usdt: "رصيد USDT غير كافٍ في OKX.", below_min_size: "المبلغ أصغر من الحد الأدنى في OKX.", plan_out_of_date: "تغير السعر كثيرًا، اطلب خطة جديدة.", instrument_not_found: "هذه العملة غير متاحة مقابل USDT في OKX.", nothing_to_sell: "لا يوجد ما يُباع.", network: "مشكلة في الاتصال بـOKX.", "50113": "المفتاح السري غير صحيح.", "50111": "API key غير صحيح.", "50105": "Passphrase غير صحيح.", "50101": "هذا المفتاح لا يطابق الوضع (تجريبي/حقيقي).", "50119": "API key غير موجود.", "51008": "الرصيد غير كافٍ." }[c] || "خطأ من OKX: " + c),
+    okxErr: (c, b) => ({ "50123": `🚫 لا يسمح OKX لحسابك بتداول ${b || "هذه العملة"} (قيود بلدك على هذه العملة أو صلاحيات المفتاح). اختر عملة أخرى.`, "50120": "🔑 مفتاح API بدون صلاحية التداول. في OKX ← API فعّل Trade (بدون سحب) وأعد الربط.", insufficient_usdt: "رصيد USDT غير كافٍ في OKX.", below_min_size: "المبلغ أصغر من الحد الأدنى في OKX.", plan_out_of_date: "تغير السعر كثيرًا، اطلب خطة جديدة.", instrument_not_found: "هذه العملة غير متاحة مقابل USDT في OKX.", nothing_to_sell: "لا يوجد ما يُباع.", network: "مشكلة في الاتصال بـOKX.", "50113": "المفتاح السري غير صحيح.", "50111": "API key غير صحيح.", "50105": "Passphrase غير صحيح.", "50101": "هذا المفتاح لا يطابق الوضع (تجريبي/حقيقي).", "50119": "API key غير موجود.", "51008": "الرصيد غير كافٍ." }[c] || "خطأ من OKX: " + c),
   },
   fr: {
+    soldButBuyFailed: (sold, b, why) => `⚠️ ${sold} vendu, l'argent est en USDT sur ton compte (rien de perdu), mais l'achat de ${b} a échoué :\n${why}`,
     progress: ["Je récupère le prix et les news...", "J'analyse le graphique...", "J'écris la réponse..."],
     pendingTitle: "⏳ Ordres en attente", noPending: "Aucun ordre en attente.", cancelOrder: "Annuler",
     pendingLine: (p, last) => `${p.instId.replace("-USDT", "")} · achat à ${p.entry} · actuel ${last ?? "…"}${last ? ` (reste ${(((last - p.entry) / last) * 100).toFixed(2)}%)` : ""} · ${p.usdt} USDT · SL ${p.sl} · TP ${p.tp}`,
@@ -278,9 +281,10 @@ const X = {
     manualTitle: "Trading manuel OKX", buyMarket: "Acheter (Market)", sellAll: "Vendre", closeTrade: "Fermer", trades: "Trades KimMarket",
     notCryptoOkx: "L'exécution OKX est réservée aux cryptos (spot). Pour les actions, utilise le portefeuille fictif.", tradeOpen: "ouvert", tradeClosed: "fermé",
     planDisclaimer: "Plan généré par IA : pas un conseil financier ni une garantie de gain. Tu décides.",
-    okxErr: (c) => ({ insufficient_usdt: "USDT insuffisant sur OKX.", below_min_size: "Montant sous le minimum OKX.", plan_out_of_date: "Le prix a trop bougé, demande un nouveau plan.", instrument_not_found: "Paire USDT introuvable sur OKX.", nothing_to_sell: "Rien à vendre.", network: "Problème de connexion à OKX.", "50113": "Secret incorrect.", "50111": "API key incorrecte.", "50105": "Passphrase incorrecte.", "50101": "Clé ne correspond pas au mode (Démo/Réel).", "50119": "API key inexistante.", "51008": "Solde insuffisant." }[c] || "Erreur OKX : " + c),
+    okxErr: (c, b) => ({ "50123": `🚫 OKX n'autorise pas ton compte à trader ${b || "cette crypto"} (restriction de pays ou permissions de la clé). Choisis une autre crypto.`, "50120": "🔑 La clé API n'a pas la permission Trade. Active Trade (sans Withdraw) dans OKX → API puis reconnecte.", insufficient_usdt: "USDT insuffisant sur OKX.", below_min_size: "Montant sous le minimum OKX.", plan_out_of_date: "Le prix a trop bougé, demande un nouveau plan.", instrument_not_found: "Paire USDT introuvable sur OKX.", nothing_to_sell: "Rien à vendre.", network: "Problème de connexion à OKX.", "50113": "Secret incorrect.", "50111": "API key incorrecte.", "50105": "Passphrase incorrecte.", "50101": "Clé ne correspond pas au mode (Démo/Réel).", "50119": "API key inexistante.", "51008": "Solde insuffisant." }[c] || "Erreur OKX : " + c),
   },
   en: {
+    soldButBuyFailed: (sold, b, why) => `⚠️ Sold ${sold}; the money is now USDT in your account (nothing lost), but buying ${b} failed:\n${why}`,
     progress: ["Fetching price and news...", "Reading the chart and indicators...", "Writing your answer..."],
     pendingTitle: "⏳ Orders waiting for price", noPending: "No waiting orders.", cancelOrder: "Cancel",
     pendingLine: (p, last) => `${p.instId.replace("-USDT", "")} · buy at ${p.entry} · now ${last ?? "…"}${last ? ` (${(((last - p.entry) / last) * 100).toFixed(2)}% away)` : ""} · ${p.usdt} USDT · SL ${p.sl} · TP ${p.tp}`,
@@ -322,7 +326,7 @@ const X = {
     manualTitle: "Manual OKX trading", buyMarket: "Buy (Market)", sellAll: "Sell", closeTrade: "Close trade", trades: "KimMarket trades",
     notCryptoOkx: "OKX execution is for crypto (spot) only. For stocks use the paper portfolio.", tradeOpen: "open", tradeClosed: "closed",
     planDisclaimer: "AI-generated plan — not financial advice and no guarantee of profit. You decide.",
-    okxErr: (c) => ({ insufficient_usdt: "Not enough USDT on OKX.", below_min_size: "Amount is below OKX's minimum.", plan_out_of_date: "Price moved too much, request a new plan.", instrument_not_found: "No USDT pair for this coin on OKX.", nothing_to_sell: "Nothing to sell.", network: "Couldn't reach OKX.", "50113": "Wrong secret key.", "50111": "Wrong API key.", "50105": "Wrong passphrase.", "50101": "Key doesn't match the mode (Demo/Live).", "50119": "API key doesn't exist.", "51008": "Insufficient balance." }[c] || "OKX error: " + c),
+    okxErr: (c, b) => ({ "50123": `🚫 OKX doesn't allow your account to trade ${b || "this coin"} (country restriction or key permissions). Pick another coin.`, "50120": "🔑 The API key has no Trade permission. Enable Trade (not Withdraw) in OKX → API and reconnect.", insufficient_usdt: "Not enough USDT on OKX.", below_min_size: "Amount is below OKX's minimum.", plan_out_of_date: "Price moved too much, request a new plan.", instrument_not_found: "No USDT pair for this coin on OKX.", nothing_to_sell: "Nothing to sell.", network: "Couldn't reach OKX.", "50113": "Wrong secret key.", "50111": "Wrong API key.", "50105": "Wrong passphrase.", "50101": "Key doesn't match the mode (Demo/Live).", "50119": "API key doesn't exist.", "51008": "Insufficient balance." }[c] || "OKX error: " + c),
   },
 };
 

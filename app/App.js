@@ -108,7 +108,8 @@ export default function App() {
   };
   // Scan OKX (public data, on the phone) and let the AI pick at most one coin.
   const scanAndPick = async (goal, exclude = []) => {
-    const cands = (await scanMarket()).filter((c) => !exclude.includes(c.instId));
+    let cands = (await scanMarket()).filter((c) => !exclude.includes(c.instId));
+    if (okx) { const ok2 = await Promise.all(cands.map((c) => okx.canTrade(c.instId))); cands = cands.filter((c, i) => ok2[i] !== false); } // skip coins this account can't trade
     if (!cands.length) return { pick: null, summary: "" };
     return (await api("/pick", { method: "POST", body: JSON.stringify({ candidates: cands, goal, lang: langRef.current }) })).pick;
   };
@@ -347,7 +348,7 @@ function Chat({ t, rtl, lang, seed, okxProps }) {
   const askLive = (text, label, fn) => { const id = "act" + Date.now(); actions.current[id] = fn; say(text + "\n\n" + t.chatConfirmLive, { action: { id, label } }); };
 
   const say = (text, extra) => setMsgs((m) => [...m.filter((x) => !x.pending), { id: "b" + Date.now() + Math.random(), me: false, text, ...extra }]);
-  const okxFail = (e) => say(t.okxErr((e && e.code) || "network"));
+  const okxFail = (e) => say(t.okxErr((e && e.code) || "network", e && e.data && e.data.ccy));
 
   // "dir trade f SOL" / "bi3 SOL": Demo executes right away, Live asks for one tap first.
   const tradeCommand = async (ti) => {
@@ -374,6 +375,8 @@ function Chat({ t, rtl, lang, seed, okxProps }) {
     try { plan = (await api("/plan", { method: "POST", body: JSON.stringify({ symbol: a.symbol, name: a.name, cgId: a.cgId, type: "crypto", lang, mode }) })).plan; }
     catch (e) { return say(t.error); }
     if (plan.action !== "buy" && plan.action !== "limit") return say(t.chatPlanWait(base, plan.summary || ""));
+    const allowed = await okx.canTrade(instId);
+    if (allowed === false) return say(t.okxErr("50123", base));
     let bal;
     try { bal = await okx.balances(); } catch (e) { return okxFail(e); }
     const free = (bal.ccy.USDT && bal.ccy.USDT.avail) || 0;
@@ -400,6 +403,7 @@ function Chat({ t, rtl, lang, seed, okxProps }) {
     const doIt = async () => {
       try {
         if (sale) {
+          if ((await okx.canTrade(instId)) === false) return say(t.okxErr("50123", base)); // never sell first if the buy can't happen
           await sellForUsdt(okx, sale); await new Promise((r) => setTimeout(r, 1500)); addEvent(t.freeUp(sale.sold, sale.sz, sale.estUsdt, base));
           if (spendAllAfterSale) { const b2 = await okx.balances(); usdt = Math.floor(((b2.ccy.USDT && b2.ccy.USDT.avail) || 0) * 0.995 * 100) / 100; }
         }
@@ -410,6 +414,7 @@ function Chat({ t, rtl, lang, seed, okxProps }) {
         } else finish(await executePlan(okx, { base, usdt, takeProfit: plan.takeProfit, stopLoss: plan.stopLoss }));
         refreshBal();
       } catch (e) {
+        if (sale && e.code !== "entry_above_price") { refreshBal(); return say(t.soldButBuyFailed(sale.sold, base, t.okxErr(e.code || "network", base))); }
         if (e.code === "entry_above_price") { try { finish(await executePlan(okx, { base, usdt, takeProfit: plan.takeProfit, stopLoss: plan.stopLoss })); } catch (e2) { okxFail(e2); } }
         else okxFail(e);
       }

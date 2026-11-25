@@ -159,6 +159,11 @@ export function createOkx({ key, secret, passphrase, demo = true }, fetchImpl = 
         attachAlgoOrds: [{ tpTriggerPx: String(tp), tpOrdPx: "-1", slTriggerPx: String(sl), slOrdPx: "-1" }] });
       return d[0].ordId;
     },
+    // Can THIS account trade this pair? (some coins are blocked by country rules or key permissions -> OKX error 50123)
+    async canTrade(instId) {
+      try { const d = await raw("GET", `/api/v5/account/instruments?instType=SPOT&instId=${encodeURIComponent(instId)}`); return Array.isArray(d) ? d.length > 0 : null; }
+      catch (e) { if (e.code === "50123" || e.code === "51001" || e.code === "50120") return false; return null; }
+    },
     async cancelOrder(instId, ordId) { return raw("POST", "/api/v5/trade/cancel-order", { instId, ordId }); },
     async algosPending(instId) {
       const out = [];

@@ -20,6 +20,7 @@ const mock = async (url, opt) => {
   if (p === "/api/v5/market/ticker") return R([{ last: "100" }]);
   if (p === "/api/v5/account/balance") return R([{ totalEq: "1200", details: [{ ccy: "USDT", availBal: String(state.usdt), eq: String(state.usdt), eqUsd: String(state.usdt) }, { ccy: "SOL", availBal: String(state.sol), eq: "2", eqUsd: "200" }] }]);
   if (p === "/api/v5/trade/order" && opt.method === "POST" && b.ordType === "limit") return R([{ ordId: "L1", sCode: "0" }]);
+  if (p === "/api/v5/account/instruments") { const id = u.searchParams.get("instId"); if (id === "NEAR-USDT") return R([{ sCode: "50123", sMsg: "This API Key does not have trading permission for the Crypto." }], "50123"); return R(id === "ZZZ-USDT" ? [] : [{ instId: id }]); }
   if (p === "/api/v5/trade/cancel-order") { state.cancelled = b.ordId; return R([{ ordId: b.ordId, sCode: "0" }]); }
   if (p === "/api/v5/trade/orders-algo-pending") return R(u.searchParams.get("ordType") === "oco" ? [{ algoId: "att1", sz: "0.999", tag: "kimmarket", cTime: "1" }] : []);
   if (p === "/api/v5/trade/order" && u.searchParams.get("ordId") === "L1") return R([{ state: state.l1 || "live", accFillSz: state.l1 === "filled" ? "1" : "0", avgPx: "95", fee: "-0.001", feeCcy: "SOL" }]);
@@ -86,4 +87,5 @@ ok(fu2.sold === null, "freeUpUsdt: nothing to sell when USDT is enough");
 const sp = await salePlanFor(okx, "SOL"); ok(sp.sold === "SOL" && sp.all && Math.abs(sp.sz - state.sol) < 1e-5, "salePlanFor: sells ALL of the coin the user named");
 const sp2 = await salePlanFor(okx, "SOL", 50); ok(Math.abs(sp2.sz - 0.515) < 1e-6 && !sp2.all, "salePlanFor: sells just enough for an amount");
 e = null; try { await salePlanFor(okx, "LINK"); } catch (x) { e = x; } ok(e && e.code === "nothing_to_sell", "salePlanFor: coin not held -> error");
+ok(await okx.canTrade("SOL-USDT") === true && await okx.canTrade("NEAR-USDT") === false && await okx.canTrade("ZZZ-USDT") === false, "canTrade: detects coins the account can't trade (50123) before any sell");
 console.log(fails ? fails + " FAILED" : "ALL OKX TESTS PASSED");
