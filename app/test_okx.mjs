@@ -61,5 +61,5 @@ const scanFetch = async (u) => ({ json: async () => u.includes("tickers") ? { da
   { instId: "BTC-EUR", last: "1", open24h: "1", volCcy24h: "90000000", vol24h: "1" } ] }
   : { data: mk(u.includes("UP-USDT") ? up : down) } });
 const sc = await scanMarket(scanFetch);
-ok(sc.length === 1 && sc[0].instId === "UP-USDT" && sc[0].vol24 >= 3e6 && sc[0].rsi14 != null, "scanMarket: keeps liquid uptrending USDT coins, drops stables/illiquid/downtrends");
+ok(sc.length === 1 && sc[0].instId === "UP-USDT" && sc[0].vol24 >= 1e7 && sc[0].rsi14 != null, "scanMarket: keeps liquid uptrending USDT coins, drops stables/illiquid/downtrends");
 console.log(fails ? fails + " FAILED" : "ALL OKX TESTS PASSED");

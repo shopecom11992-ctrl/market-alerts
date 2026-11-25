@@ -562,7 +562,7 @@ function scoreCandles(c) { // c: closes oldest -> newest (1h)
   return { last, sma20: r2(s20, 8), sma50: r2(s50, 8), rsi14: r2(R, 1), chg4h: r2(chg4h), atrPct: r2(atr), high48h: hi, low48h: lo, score, closes12h: c.slice(-12).map((x) => +x.toPrecision(6)) };
 }
 
-async function scanMarket(fetchImpl = fetch, { minVol = 3e6, max = 6 } = {}) {
+async function scanMarket(fetchImpl = fetch, { minVol = 1e7, max = 6 } = {}) {
   const base = "https://www.okx.com";
   const t = await fetchImpl(base + "/api/v5/market/tickers?instType=SPOT").then((r) => r.json());
   const tick = (t.data || []).filter((x) => x.instId.endsWith("-USDT") && !STABLE.has(x.instId.split("-")[0]))
