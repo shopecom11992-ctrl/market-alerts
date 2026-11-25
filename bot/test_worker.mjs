@@ -1,5 +1,5 @@
 // Offline tests for the WhatsApp Q&A worker: Gemini (+Google Search), Yahoo, CoinGecko, Google News and Green-API are mocked.
-import worker, { parseWebhook, summarize, localSymbols, resolveAsset, rankModels, candidateWords, nice, searchAssets, chartData, validatePlan, validateManage, tradeIntent, cleanAction } from "./worker.js";
+import worker, { parseWebhook, summarize, localSymbols, resolveAsset, rankModels, candidateWords, nice, searchAssets, chartData, validatePlan, validateManage, tradeIntent, cleanAction, validateSmart, validateNow } from "./worker.js";
 import assert from "node:assert/strict";
 
 const env = { GEMINI_API_KEY: "g", GREENAPI_TOKEN: "t", GREENAPI_URL: "https://7107.api.greenapi.com",
@@ -275,6 +275,18 @@ r = await apiCall("/api/pick", { method: "POST", body: JSON.stringify({ candidat
 ok(r.body.pick.pick === "SUI-USDT" && r.body.pick.entry === 2 && r.body.pick.slPct === 4 && r.body.pick.rr >= 1.5, "pick: validated coin pick from OKX scan");
 r = await apiCall("/api/pick", { method: "POST", body: JSON.stringify({ candidates: [{ instId: "<script>", last: 1 }] }) });
 ok(r.body.pick.pick === null, "pick: rejects junk candidates");
+// --- smart / now plans
+let sm = validateSmart({ action: "limit", entry: 95, stopLoss: 91, takeProfit: 105, expiryHours: 12 }, 100);
+ok(sm.action === "limit" && sm.entry === 95 && sm.distPct === 5 && sm.expiryHours === 12 && sm.rr >= 1.5, "smart: limit entry below price with SL/TP relative to entry");
+ok(validateSmart({ action: "limit", entry: 101, stopLoss: 95, takeProfit: 110 }, 100).action === "wait", "smart: limit above price rejected");
+ok(validateSmart({ action: "limit", entry: 80, stopLoss: 75, takeProfit: 95 }, 100).action === "wait", "smart: limit too far (>10%) rejected");
+ok(validateSmart({ action: "buy", stopLoss: 96, takeProfit: 110 }, 100).action === "buy", "smart: buy now passes");
+let nw = validateNow({ action: "wait", stopLoss: 99.9, takeProfit: 100.5 }, 100);
+ok(nw.action === "buy" && nw.stopLoss === 96 && nw.takeProfit === 108 && nw.defaultLevels, "now: bad AI levels -> default -4%/+8% bracket");
+ok(validateNow({ action: "wait", stopLoss: 95, takeProfit: 110 }, 100).stopLoss === 95, "now: keeps sensible AI levels even if AI said wait");
+ok(cleanAction({ type: "open", symbol: "SOL", when: "now" }).when === "now" && cleanAction({ type: "open", symbol: "SOL" }).when === "best", "agent action carries when=now|best");
+r = await apiCall("/api/plan", { method: "POST", body: JSON.stringify({ symbol: "NVDA", mode: "now" }) });
+ok(r.body.plan.action === "buy", "POST /api/plan mode=now always returns a buy plan");
 r = await apiCall("/api/nope");
 ok(r.status === 404, "unknown API path -> 404");
 const opt = await worker.fetch(new Request("https://x.workers.dev/api/chat", { method: "OPTIONS" }), env, { waitUntil() {} });

@@ -122,7 +122,8 @@ export async function api(request, url, env) {
       const lang = LANGS.includes(b.lang) ? b.lang : "darija";
       const sym = String(b.symbol || "").toUpperCase().trim();
       if (!/^[\^A-Z0-9.=\-]{1,20}$/.test(sym)) return json({ error: "bad_symbol" }, 400);
-      return json({ plan: await tradePlan({ symbol: sym, name: String(b.name || sym).slice(0, 60), cgId: b.cgId || undefined, type: b.type }, env, lang) });
+      const mode = ["now", "smart"].includes(b.mode) ? b.mode : "default";
+      return json({ plan: await tradePlan({ symbol: sym, name: String(b.name || sym).slice(0, 60), cgId: b.cgId || undefined, type: b.type }, env, lang, mode) });
     }
     if (url.pathname === "/api/search") {
       return json({ results: await searchAssets(url.searchParams.get("q") || "") });
@@ -207,22 +208,50 @@ export function validatePlan(p, price) {
   return { ...out, action: "buy", stopLoss: nice(out.stopLoss), takeProfit: nice(out.takeProfit), slPct: +slPct.toFixed(2), tpPct: +tpPct.toFixed(2), rr: +rr.toFixed(2) };
 }
 
-export async function tradePlan(asset, env, lang = "darija") {
+// "smart": buy now, or a limit entry at a better price (pullback), or skip. "now": the user insists on buying now; give SL/TP anyway.
+const PLAN_SMART = `\nMODE SMART: choose "buy" (enter now at current price), "limit" (the coin is fine but a better entry is likely: give "entry" = a support / pullback level 0.5% to 8% BELOW the current price, and "expiryHours" 6-72) or "wait" (bad setup: downtrend, bad news — do not buy at all).
+For "limit": stopLoss and takeProfit are relative to "entry" (stopLoss 1%-12% under entry, reward/risk >= 1.5). Add "entry" and "expiryHours" to the JSON; action may be "limit".`;
+const PLAN_NOW = `\nMODE NOW: the user insists on buying RIGHT NOW. Set action "buy" with the most sensible stopLoss/takeProfit for an entry at the current price. If conditions are bad, still give levels but say it honestly in summary/risks.`;
+
+export function validateSmart(raw, price) {
+  if (raw && raw.action === "limit") {
+    const entry = parseFloat(raw.entry);
+    if (!(entry < price * 0.995 && entry > price * 0.9)) return { ...validatePlan({ ...raw, action: "wait" }, price), action: "wait", rejected: true };
+    const v = validatePlan({ ...raw, action: "buy" }, entry);
+    if (v.action !== "buy") return { ...v, action: "wait", rejected: true };
+    const hrs = Math.max(6, Math.min(72, parseFloat(raw.expiryHours) || 24));
+    return { ...v, action: "limit", entry: nice(entry), expiryHours: hrs, distPct: +((1 - entry / price) * 100).toFixed(2) };
+  }
+  return validatePlan(raw || {}, price);
+}
+
+export function validateNow(raw, price) {
+  const v = validatePlan({ ...(raw || {}), action: "buy" }, price);
+  if (v.action === "buy") return v;
+  // AI levels unusable: fall back to a plain -4% / +8% bracket.
+  return { ...validatePlan({ ...(raw || {}), action: "buy", stopLoss: price * 0.96, takeProfit: price * 1.08 }, price), defaultLevels: true };
+}
+
+export async function tradePlan(asset, env, lang = "darija", mode = "default") {
   const M = PLAN_MSG[lang] || PLAN_MSG.darija;
   const deadline = Date.now() + BUDGET_MS;
   const d = await gather(asset);
   const price = d.price && d.price.last;
   if (!price) return { action: "wait", summary: M.noPrice, symbol: asset.symbol };
-  const sys = PLAN_SYSTEM + "\n" + (PLAN_LANG[lang] || PLAN_LANG.darija);
+  const sys = PLAN_SYSTEM + (mode === "smart" ? PLAN_SMART : mode === "now" ? PLAN_NOW : "") + "\n" + (PLAN_LANG[lang] || PLAN_LANG.darija);
   const user = "DATA:\n" + JSON.stringify(d, null, 1);
   let raw; const dbg = [];
   try { raw = extractJSON(await gemini(env, sys, user, false, 1500, env.AI ? Math.min(deadline - 9000, Date.now() + 14000) : deadline - 1500)); }
   catch (e) {
     dbg.push(String(e && e.message).slice(0, 160));
     try { raw = extractJSON(await workersAI(env, sys, user, deadline - 500)); }
-    catch (e2) { dbg.push(String(e2 && e2.message).slice(0, 160)); console.log("plan failed:", dbg.join(" | ")); return { action: "wait", summary: M.busy, symbol: asset.symbol, price, error: "ai_busy", dbg }; }
+    catch (e2) {
+      dbg.push(String(e2 && e2.message).slice(0, 160)); console.log("plan failed:", dbg.join(" | "));
+      if (mode === "now") return { ...validateNow({}, price), summary: M.busy, symbol: asset.symbol, price, error: "ai_busy" };
+      return { action: "wait", summary: M.busy, symbol: asset.symbol, price, error: "ai_busy", dbg };
+    }
   }
-  const v = validatePlan(raw || {}, price);
+  const v = mode === "smart" ? validateSmart(raw, price) : mode === "now" ? validateNow(raw, price) : validatePlan(raw || {}, price);
   if (v.rejected) v.summary = M.bad + (v.summary ? "\n\n" + v.summary : "");
   return { ...v, symbol: asset.symbol, name: asset.name, price, currency: (d.price && d.price.currency) || "USD", indicators: { sma20: d.price.sma20, sma50: d.price.sma50, rsi14: d.price.rsi14, support20: d.price.support20, resistance20: d.price.resistance20 } };
 }
@@ -282,11 +311,12 @@ const AGENT_SYSTEM = `You are "Kim", the trading assistant inside the KimMarket.
 Darija hints: bghit/baghi=I want, chri/nchri/ychri=buy, bi3/nbi3=sell, sed/sedd=close, rba7/ribh=profit, khsara/khser=loss, flous=money, chhal=how much, db/daba=now, wach=is it/should, 3lach=why, kifach=how, imta=when, mzyan=good, khayb=bad, tla3=went up, hbet/tah=went down, coin/3omla=coin, fhmtini=you understand me, svp=please, yalah=go, wakha/ok=ok, bzaf/bzzf=a lot, chwiya=a little, 9alab/y9alb=search, l9it/l9a=found, nhar/iyam/jours=day(s), simana=week, chhar=month.
 The user is connected (or not) to their OKX account; the app can execute SPOT trades only (no leverage, no shorts, no deposits/withdrawals). CONTEXT gives balance, open trades and the active mission.
 Decide what the user wants and return ONLY JSON:
-{"reply":"your answer to show the user","action":{"type":"none"|"analyze"|"scan"|"open"|"close"|"close_all"|"start_mission"|"stop_mission","symbol":string|null,"query":string|null,"targetPct":number|null,"days":number|null,"maxLossPct":number|null,"capitalUsdt":number|null}}
+{"reply":"your answer to show the user","action":{"type":"none"|"analyze"|"scan"|"open"|"close"|"close_all"|"cancel_orders"|"start_mission"|"stop_mission","symbol":string|null,"when":"now"|"best"|null,"query":string|null,"targetPct":number|null,"days":number|null,"maxLossPct":number|null,"capitalUsdt":number|null}}
 Action meanings:
 - "analyze": user asks about a coin/stock/market (opinion, should I buy, why it moved). Put the asset or question in "query". reply can be a short "let me check" line.
 - "scan": user asks you to find/search a good coin to buy now ("9aleb liya 3la coin mzyana").
-- "open": user explicitly orders to buy/open a trade now on a named coin ("chri liya SOL", "dir trade f BTC"). symbol = ticker like SOL.
+- "open": user orders to buy a named coin. symbol = ticker like SOL. "when": "now" if the user wants it immediately ("khodha db", "chriha daba", "direct", "f l7in") ; "best" if the user lets you pick the moment ("chof nta lw9t mzyan w chri", "tsna lprix mzyan", "chriha mli tkoun mzyana") or gives no timing.
+- "cancel_orders": cancel waiting (limit) buy orders ("lghi l'ordre", "ma bghitch nchri SOL", "w9ef dak l'ordre").
 - "close": user orders to sell/close a named coin. "close_all": sell/close everything.
 - "start_mission": user gives you money/goal to trade by yourself (e.g. "3andi 93 usdt, chri w bi3 bohdk, bghit 20% f 7 iyam"). Fill capitalUsdt, targetPct, days; maxLossPct = what the user said, else 10.
 - "stop_mission": stop autonomous trading.
@@ -294,13 +324,13 @@ Action meanings:
 Rules for "reply": write like a friendly Moroccan talking (Darija in Arabic script, short, warm, clear; tickers in Latin letters). Never promise profits. If the user asks for a big/fast target (e.g. 20% in a week), accept the mission but say honestly it is ambitious, that you will not take crazy risks to force it, that every trade has a stop-loss, and that you stop if losses reach maxLossPct. If not connected to OKX and the action needs trading, tell them to connect OKX in Settings. Keep it under 90 words unless the user asks for detail.`;
 
 const AGENT_LANG = { darija: "Write \"reply\" in Moroccan Darija (Arabic script only — never Hebrew or other scripts).", ar: "Write \"reply\" in Modern Standard Arabic.", fr: "Write \"reply\" in French.", en: "Write \"reply\" in English." };
-const ACTIONS = ["none", "analyze", "scan", "open", "close", "close_all", "start_mission", "stop_mission"];
+const ACTIONS = ["none", "analyze", "scan", "open", "close", "close_all", "cancel_orders", "start_mission", "stop_mission"];
 
 export function cleanAction(a) {
   a = a && typeof a === "object" ? a : {};
   const type = ACTIONS.includes(a.type) ? a.type : "none";
   const num = (v, lo, hi, d) => { const n = parseFloat(v); return isFinite(n) && n >= lo && n <= hi ? n : d; };
-  const out = { type, symbol: a.symbol ? String(a.symbol).toUpperCase().replace(/[^A-Z0-9]/g, "").replace(/USDT$|USD$/, "").slice(0, 12) || null : null, query: a.query ? String(a.query).slice(0, 200) : null };
+  const out = { type, symbol: a.symbol ? String(a.symbol).toUpperCase().replace(/[^A-Z0-9]/g, "").replace(/USDT$|USD$/, "").slice(0, 12) || null : null, query: a.query ? String(a.query).slice(0, 200) : null, when: a.when === "now" ? "now" : "best" };
   if (type === "start_mission") { out.targetPct = num(a.targetPct, 1, 100, 10); out.days = num(a.days, 1, 90, 7); out.maxLossPct = num(a.maxLossPct, 2, 50, 10); out.capitalUsdt = num(a.capitalUsdt, 5, 1e7, null); }
   return out;
 }
