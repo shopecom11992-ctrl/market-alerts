@@ -149,6 +149,12 @@ const S = {
 // OKX connection + AI trade plan strings
 const X = {
   darija: {
+    pendingTitle: "⏳ أوامر كتسنى الثمن", noPending: "ما كاين حتى أمر كيتسنى.", cancelOrder: "لغي",
+    pendingLine: (p, last) => `${p.instId.replace("-USDT", "")} · نشري ف ${p.entry} · دابا ${last ?? "…"}${last ? ` (باقي ${(((last - p.entry) / last) * 100).toFixed(2)}%)` : ""} · ${p.usdt} USDT · SL ${p.sl} · TP ${p.tp}`,
+    pendingPlaced: (b, p) => `⏳ حطيت أمر شرا ف ${b}: غادي نشري ملي يهبط الثمن لـ ${p.entry} (−${p.distPct}% من دابا)، بـ ${p.usdt} USDT.\nSL ${p.stopLoss} · TP ${p.takeProfit} · كيبقى ${p.expiryHours} ساعة.\nالأمر كاين ف OKX 24/24، وتقدر تشوفو ولا تلغيه ف «المحفظة».\n\n${p.summary || ""}`,
+    pendingFilled: (b, px) => `✅ ${b}: الثمن وصل لـ ${px} وتشرات. الـStop-loss والـTake-profit خدامين ف OKX.`, pendingExpired: (b) => `⌛ ${b}: الثمن ما وصلش للمستوى ف الوقت، لغيت الأمر.`, pendingCanceled: (b) => `🗑️ ${b}: تلغى الأمر.`,
+    ordersCanceled: (n) => `🗑️ لغيت ${n} أمر كيتسناو.`, nowBadNote: "⚠️ شريت حيت طلبتي دابا، ولكن الذكاء الاصطناعي كان كيشوف بلي الوقت ماشي مزيان بزاف:",
+    freeUp: (sold, sz, est, b) => `💱 الـUSDT ما كافيش، غادي نبيع ${sz} ${sold} (≈${est} USDT، أضعف عملة عندك دابا) باش نشري ${b}.`,
     newChat: "شات جديد", chatHistory: "الشاتات", noChats: "باقي ما كاين حتى شات محفوظ.", deleteChat: "مسح الشات",
     missionTitle: "🎯 المهمة ديال البوت", missionStop: "وقف المهمة", missionNone: "ما كايناش مهمة. قول للبوت ف الشات مثلا: «عندي 93 USDT، شري وبيع بوحدك، بغيت 10% ف 7 أيام».",
     missionLine: (m, pnl, dl) => `الهدف +${m.targetPct}% ف ${m.days} أيام · دابا ${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}% · باقي ${dl} يوم · أقصى خسارة -${m.maxLossPct}% · رأس المال ${m.capital} USDT`,
@@ -186,6 +192,12 @@ const X = {
     okxErr: (c) => ({ insufficient_usdt: "الـUSDT ما كافيش ف OKX.", below_min_size: "المبلغ صغير بزاف على OKX.", plan_out_of_date: "الثمن تبدل بزاف، طلب خطة جديدة.", instrument_not_found: "هاد العملة ما كايناش ف OKX مقابل USDT.", nothing_to_sell: "ما كاين والو باش يتباع.", network: "مشكل ف الاتصال بـOKX.", "50113": "المفاتيح غالطين (Secret).", "50111": "API key غالط.", "50105": "Passphrase غالط.", "50101": "هاد المفتاح ماشي ديال هاد الوضع (Demo/Live).", "50119": "API key ما كاينش.", "51008": "الرصيد ما كافيش." }[c] || "خطأ من OKX: " + c),
   },
   ar: {
+    pendingTitle: "⏳ أوامر تنتظر السعر", noPending: "لا توجد أوامر منتظرة.", cancelOrder: "إلغاء",
+    pendingLine: (p, last) => `${p.instId.replace("-USDT", "")} · شراء عند ${p.entry} · الآن ${last ?? "…"}${last ? ` (متبقٍ ${(((last - p.entry) / last) * 100).toFixed(2)}%)` : ""} · ${p.usdt} USDT · SL ${p.sl} · TP ${p.tp}`,
+    pendingPlaced: (b, p) => `⏳ وضعت أمر شراء على ${b}: سأشتري عندما ينزل السعر إلى ${p.entry} (−${p.distPct}% من الآن)، بمبلغ ${p.usdt} USDT.\nSL ${p.stopLoss} · TP ${p.takeProfit} · صالح ${p.expiryHours} ساعة.\nالأمر في OKX على مدار الساعة، ويمكنك متابعته أو إلغاؤه من «المحفظة».\n\n${p.summary || ""}`,
+    pendingFilled: (b, px) => `✅ ${b}: وصل السعر إلى ${px} وتم الشراء. وقف الخسارة وجني الأرباح فعّالان في OKX.`, pendingExpired: (b) => `⌛ ${b}: لم يصل السعر في الوقت المحدد، ألغيت الأمر.`, pendingCanceled: (b) => `🗑️ ${b}: أُلغي الأمر.`,
+    ordersCanceled: (n) => `🗑️ ألغيت ${n} أمرًا منتظرًا.`, nowBadNote: "⚠️ اشتريت لأنك طلبت الآن، لكن الذكاء الاصطناعي يرى أن التوقيت ليس جيدًا:",
+    freeUp: (sold, sz, est, b) => `💱 رصيد USDT غير كافٍ، سأبيع ${sz} ${sold} (≈${est} USDT، أضعف عملة لديك الآن) لشراء ${b}.`,
     newChat: "محادثة جديدة", chatHistory: "المحادثات", noChats: "لا توجد محادثات محفوظة بعد.", deleteChat: "حذف المحادثة",
     missionTitle: "🎯 مهمة البوت", missionStop: "إيقاف المهمة", missionNone: "لا توجد مهمة. قل للبوت مثلًا: «لدي 93 USDT، اشترِ وبِع بنفسك، أريد 10% في 7 أيام».",
     missionLine: (m, pnl, dl) => `الهدف +${m.targetPct}% في ${m.days} أيام · الآن ${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}% · متبقٍ ${dl} يوم · أقصى خسارة -${m.maxLossPct}% · رأس المال ${m.capital} USDT`,
@@ -223,6 +235,12 @@ const X = {
     okxErr: (c) => ({ insufficient_usdt: "رصيد USDT غير كافٍ في OKX.", below_min_size: "المبلغ أصغر من الحد الأدنى في OKX.", plan_out_of_date: "تغير السعر كثيرًا، اطلب خطة جديدة.", instrument_not_found: "هذه العملة غير متاحة مقابل USDT في OKX.", nothing_to_sell: "لا يوجد ما يُباع.", network: "مشكلة في الاتصال بـOKX.", "50113": "المفتاح السري غير صحيح.", "50111": "API key غير صحيح.", "50105": "Passphrase غير صحيح.", "50101": "هذا المفتاح لا يطابق الوضع (تجريبي/حقيقي).", "50119": "API key غير موجود.", "51008": "الرصيد غير كافٍ." }[c] || "خطأ من OKX: " + c),
   },
   fr: {
+    pendingTitle: "⏳ Ordres en attente", noPending: "Aucun ordre en attente.", cancelOrder: "Annuler",
+    pendingLine: (p, last) => `${p.instId.replace("-USDT", "")} · achat à ${p.entry} · actuel ${last ?? "…"}${last ? ` (reste ${(((last - p.entry) / last) * 100).toFixed(2)}%)` : ""} · ${p.usdt} USDT · SL ${p.sl} · TP ${p.tp}`,
+    pendingPlaced: (b, p) => `⏳ Ordre d'achat placé sur ${b} : j'achète si le prix descend à ${p.entry} (−${p.distPct}%), pour ${p.usdt} USDT.\nSL ${p.stopLoss} · TP ${p.takeProfit} · valable ${p.expiryHours} h.\nL'ordre est sur OKX 24h/24 ; suis-le ou annule-le dans « Portefeuille ».\n\n${p.summary || ""}`,
+    pendingFilled: (b, px) => `✅ ${b} : prix atteint (${px}), achat exécuté. SL/TP actifs sur OKX.`, pendingExpired: (b) => `⌛ ${b} : prix non atteint à temps, ordre annulé.`, pendingCanceled: (b) => `🗑️ ${b} : ordre annulé.`,
+    ordersCanceled: (n) => `🗑️ ${n} ordre(s) annulé(s).`, nowBadNote: "⚠️ Acheté car tu as demandé maintenant, mais l'IA trouve le moment peu favorable :",
+    freeUp: (sold, sz, est, b) => `💱 USDT insuffisant : je vends ${sz} ${sold} (≈${est} USDT, ta crypto la plus faible) pour acheter ${b}.`,
     newChat: "Nouveau chat", chatHistory: "Historique", noChats: "Aucune conversation enregistrée.", deleteChat: "Supprimer",
     missionTitle: "🎯 Mission du bot", missionStop: "Arrêter la mission", missionNone: "Aucune mission. Dis au bot par ex. : « J'ai 93 USDT, achète et vends tout seul, je veux 10 % en 7 jours ».",
     missionLine: (m, pnl, dl) => `Objectif +${m.targetPct}% en ${m.days} j · actuel ${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}% · reste ${dl} j · perte max -${m.maxLossPct}% · capital ${m.capital} USDT`,
@@ -260,6 +278,12 @@ const X = {
     okxErr: (c) => ({ insufficient_usdt: "USDT insuffisant sur OKX.", below_min_size: "Montant sous le minimum OKX.", plan_out_of_date: "Le prix a trop bougé, demande un nouveau plan.", instrument_not_found: "Paire USDT introuvable sur OKX.", nothing_to_sell: "Rien à vendre.", network: "Problème de connexion à OKX.", "50113": "Secret incorrect.", "50111": "API key incorrecte.", "50105": "Passphrase incorrecte.", "50101": "Clé ne correspond pas au mode (Démo/Réel).", "50119": "API key inexistante.", "51008": "Solde insuffisant." }[c] || "Erreur OKX : " + c),
   },
   en: {
+    pendingTitle: "⏳ Orders waiting for price", noPending: "No waiting orders.", cancelOrder: "Cancel",
+    pendingLine: (p, last) => `${p.instId.replace("-USDT", "")} · buy at ${p.entry} · now ${last ?? "…"}${last ? ` (${(((last - p.entry) / last) * 100).toFixed(2)}% away)` : ""} · ${p.usdt} USDT · SL ${p.sl} · TP ${p.tp}`,
+    pendingPlaced: (b, p) => `⏳ Placed a buy order on ${b}: I'll buy if price drops to ${p.entry} (−${p.distPct}% from now), for ${p.usdt} USDT.\nSL ${p.stopLoss} · TP ${p.takeProfit} · valid ${p.expiryHours} h.\nThe order sits on OKX 24/7; track or cancel it in Portfolio.\n\n${p.summary || ""}`,
+    pendingFilled: (b, px) => `✅ ${b}: price reached ${px} and the buy filled. Stop-loss and take-profit are live on OKX.`, pendingExpired: (b) => `⌛ ${b}: price didn't reach the level in time; order cancelled.`, pendingCanceled: (b) => `🗑️ ${b}: order cancelled.`,
+    ordersCanceled: (n) => `🗑️ Cancelled ${n} waiting order(s).`, nowBadNote: "⚠️ Bought because you asked for now, but the AI thinks the timing isn't great:",
+    freeUp: (sold, sz, est, b) => `💱 Not enough USDT: I'll sell ${sz} ${sold} (≈${est} USDT, your weakest coin right now) to buy ${b}.`,
     newChat: "New chat", chatHistory: "Chats", noChats: "No saved chats yet.", deleteChat: "Delete chat",
     missionTitle: "🎯 Bot mission", missionStop: "Stop mission", missionNone: "No mission. Tell the bot e.g.: \"I have 93 USDT, buy and sell by yourself, I want 10% in 7 days\".",
     missionLine: (m, pnl, dl) => `Target +${m.targetPct}% in ${m.days} days · now ${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}% · ${dl} days left · max loss -${m.maxLossPct}% · capital ${m.capital} USDT`,

@@ -153,6 +153,20 @@ export function createOkx({ key, secret, passphrase, demo = true }, fetchImpl = 
       return d[0].algoId;
     },
     async cancelAlgo(instId, algoId) { return raw("POST", "/api/v5/trade/cancel-algos", [{ instId, algoId }]); },
+    // Limit buy that waits on the OKX order book (24/7) with TP/SL attached: they activate on OKX as soon as it fills.
+    async limitBuy(instId, px, sz, tp, sl) {
+      const d = await raw("POST", "/api/v5/trade/order", { instId, tdMode: "cash", side: "buy", ordType: "limit", px: String(px), sz: String(sz), tag: "kimmarket",
+        attachAlgoOrds: [{ tpTriggerPx: String(tp), tpOrdPx: "-1", slTriggerPx: String(sl), slOrdPx: "-1" }] });
+      return d[0].ordId;
+    },
+    async cancelOrder(instId, ordId) { return raw("POST", "/api/v5/trade/cancel-order", { instId, ordId }); },
+    async algosPending(instId) {
+      const out = [];
+      for (const ordType of ["oco", "conditional"]) {
+        try { const d = await raw("GET", `/api/v5/trade/orders-algo-pending?ordType=${ordType}&instType=SPOT&instId=${encodeURIComponent(instId)}`); d.forEach((a) => out.push({ algoId: a.algoId, sz: parseFloat(a.sz) || 0, tag: a.tag || "", cTime: parseInt(a.cTime, 10) || 0, ordType })); } catch {}
+      }
+      return out.sort((a, b) => b.cTime - a.cTime);
+    },
   };
   return api;
 }
@@ -196,9 +210,13 @@ export async function executePlan(okx, { base, usdt, takeProfit, stopLoss }, wai
   return log;
 }
 
-// Close a KimMarket trade: cancel its OCO, then market-sell the quantity it bought.
+// Close a KimMarket trade: cancel its OCO (or the TP/SL attached to a filled limit order), then market-sell what it bought.
 export async function closeTrade(okx, trade) {
   if (trade.algoId) { try { await okx.cancelAlgo(trade.instId, trade.algoId); } catch {} }
+  else if (okx.algosPending) {
+    const mine = (await okx.algosPending(trade.instId)).filter((a) => a.tag === "kimmarket" || Math.abs(a.sz - (trade.qty || 0)) <= (trade.qty || 0) * 0.02);
+    for (const a of mine) { try { await okx.cancelAlgo(trade.instId, a.algoId); } catch {} }
+  }
   const inst = await okx.instrument(trade.instId);
   const base = trade.instId.split("-")[0];
   const bal = await okx.balances();
@@ -268,3 +286,66 @@ export async function scanMarket(fetchImpl = fetch, { minVol = 1e7, max = 6 } = 
   }
   return out.filter((x) => x.score >= 3).sort((a, b) => b.score - a.score || b.vol24 - a.vol24).slice(0, max);
 }
+
+
+// ---------------------------------------------------------------- waiting (limit) entries
+// Place a limit buy at the AI's entry price; OKX keeps it 24/7 and activates TP/SL on fill.
+export async function placeEntry(okx, { base, usdt, entry, takeProfit, stopLoss, expiryHours = 24 }) {
+  const instId = `${base}-USDT`;
+  const inst = await okx.instrument(instId);
+  const last = await okx.ticker(instId);
+  if (!(entry < last)) throw new OkxError("entry_above_price", "entry_above_price", { last });
+  if (!(stopLoss < entry && entry < takeProfit)) throw new OkxError("plan_out_of_date", "plan_out_of_date");
+  const bal = await okx.balances();
+  const free = (bal.ccy.USDT && bal.ccy.USDT.avail) || 0;
+  if (free < usdt) throw new OkxError("insufficient_usdt", "insufficient_usdt", { free });
+  const px = roundTo(entry, inst.tickSz);
+  const sz = floorTo(usdt / parseFloat(px), inst.lotSz);
+  if (parseFloat(sz) < inst.minSz) throw new OkxError("below_min_size", "below_min_size", { minSz: inst.minSz });
+  const tp = roundTo(takeProfit, inst.tickSz), sl = roundTo(stopLoss, inst.tickSz);
+  const ordId = await okx.limitBuy(instId, px, sz, tp, sl);
+  return { kind: "pending", instId, ordId, entry: parseFloat(px), sz: parseFloat(sz), tp, sl, usdt, demo: okx.demo, ts: Date.now(), expiresAt: Date.now() + expiryHours * 3600000, lastPx: last };
+}
+
+// Check a waiting order: still waiting, filled (-> becomes a trade), canceled, or expired (we cancel it).
+export async function checkPending(okx, p) {
+  const o = await okx.order(p.instId, p.ordId);
+  if (o.state === "filled" || (o.state === "canceled" && o.filled > 0)) {
+    const base = p.instId.split("-")[0];
+    let algoId = null;
+    try { const al = await okx.algosPending(p.instId); const m = al.find((a) => Math.abs(a.sz - o.filled) <= o.filled * 0.03) || al[0]; algoId = m ? m.algoId : null; } catch {}
+    return { state: "filled", trade: { instId: p.instId, demo: p.demo, ts: Date.now(), usdt: p.usdt, fill: o, qty: o.filled + (o.feeCcy === base ? o.fee : 0), tp: p.tp, sl: p.sl, algoId, open: true, source: "limit" } };
+  }
+  if (o.state === "canceled" || o.state === "mmp_canceled") return { state: "canceled" };
+  if (Date.now() > p.expiresAt && o.filled === 0) { try { await okx.cancelOrder(p.instId, p.ordId); } catch {} return { state: "expired" }; }
+  let lastPx = p.lastPx; try { lastPx = await okx.ticker(p.instId); } catch {}
+  return { state: "waiting", lastPx };
+}
+
+// Not enough USDT? Sell (part of) the weakest coin the user holds. Coins locked in open trades are skipped.
+export async function freeUpUsdt(okx, needUsdt, { exclude = [] } = {}, fetchImpl = fetch) {
+  const bal = await okx.balances();
+  const have = (bal.ccy.USDT && bal.ccy.USDT.avail) || 0;
+  const missing = needUsdt - have;
+  if (missing <= 0) return { sold: null, missing: 0 };
+  const holds = Object.entries(bal.ccy).filter(([c, v]) => c !== "USDT" && !exclude.includes(c) && v.avail > 0 && v.eq > 0 && (v.usd * v.avail / v.eq) >= 1)
+    .map(([c, v]) => ({ ccy: c, avail: v.avail, usdAvail: v.usd * v.avail / v.eq }));
+  if (!holds.length) throw new OkxError("nothing_to_sell", "nothing_to_sell");
+  for (const h of holds) {
+    try {
+      const k = await fetchImpl(`https://www.okx.com/api/v5/market/candles?instId=${h.ccy}-USDT&bar=1H&limit=100`).then((r) => r.json());
+      const closes = (k.data || []).map((row) => parseFloat(row[4])).reverse();
+      h.score = closes.length >= 60 ? scoreCandles(closes).score : 0;
+    } catch { h.score = 0; }
+  }
+  const enough = holds.filter((h) => h.usdAvail >= missing * 1.03);
+  const pick = (enough.length ? enough : holds).sort((a, b) => a.score - b.score || b.usdAvail - a.usdAvail)[0];
+  const instId = `${pick.ccy}-USDT`;
+  const inst = await okx.instrument(instId);
+  const last = await okx.ticker(instId);
+  const wantBase = Math.min(pick.avail, (missing * 1.03) / last);
+  const sz = floorTo(Math.max(wantBase, inst.minSz), inst.lotSz);
+  if (parseFloat(sz) > pick.avail || parseFloat(sz) < inst.minSz) throw new OkxError("nothing_to_sell", "nothing_to_sell");
+  return { sold: pick.ccy, sz: parseFloat(sz), estUsdt: +(parseFloat(sz) * last).toFixed(2), score: pick.score, instId, missing: +missing.toFixed(2) };
+}
+export async function sellForUsdt(okx, plan) { return okx.marketSell(plan.instId, plan.sz); }

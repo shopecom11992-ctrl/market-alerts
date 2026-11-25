@@ -162,6 +162,12 @@ const S = {
 // OKX connection + AI trade plan strings
 const X = {
   darija: {
+    pendingTitle: "⏳ أوامر كتسنى الثمن", noPending: "ما كاين حتى أمر كيتسنى.", cancelOrder: "لغي",
+    pendingLine: (p, last) => `${p.instId.replace("-USDT", "")} · نشري ف ${p.entry} · دابا ${last ?? "…"}${last ? ` (باقي ${(((last - p.entry) / last) * 100).toFixed(2)}%)` : ""} · ${p.usdt} USDT · SL ${p.sl} · TP ${p.tp}`,
+    pendingPlaced: (b, p) => `⏳ حطيت أمر شرا ف ${b}: غادي نشري ملي يهبط الثمن لـ ${p.entry} (−${p.distPct}% من دابا)، بـ ${p.usdt} USDT.\nSL ${p.stopLoss} · TP ${p.takeProfit} · كيبقى ${p.expiryHours} ساعة.\nالأمر كاين ف OKX 24/24، وتقدر تشوفو ولا تلغيه ف «المحفظة».\n\n${p.summary || ""}`,
+    pendingFilled: (b, px) => `✅ ${b}: الثمن وصل لـ ${px} وتشرات. الـStop-loss والـTake-profit خدامين ف OKX.`, pendingExpired: (b) => `⌛ ${b}: الثمن ما وصلش للمستوى ف الوقت، لغيت الأمر.`, pendingCanceled: (b) => `🗑️ ${b}: تلغى الأمر.`,
+    ordersCanceled: (n) => `🗑️ لغيت ${n} أمر كيتسناو.`, nowBadNote: "⚠️ شريت حيت طلبتي دابا، ولكن الذكاء الاصطناعي كان كيشوف بلي الوقت ماشي مزيان بزاف:",
+    freeUp: (sold, sz, est, b) => `💱 الـUSDT ما كافيش، غادي نبيع ${sz} ${sold} (≈${est} USDT، أضعف عملة عندك دابا) باش نشري ${b}.`,
     newChat: "شات جديد", chatHistory: "الشاتات", noChats: "باقي ما كاين حتى شات محفوظ.", deleteChat: "مسح الشات",
     missionTitle: "🎯 المهمة ديال البوت", missionStop: "وقف المهمة", missionNone: "ما كايناش مهمة. قول للبوت ف الشات مثلا: «عندي 93 USDT، شري وبيع بوحدك، بغيت 10% ف 7 أيام».",
     missionLine: (m, pnl, dl) => `الهدف +${m.targetPct}% ف ${m.days} أيام · دابا ${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}% · باقي ${dl} يوم · أقصى خسارة -${m.maxLossPct}% · رأس المال ${m.capital} USDT`,
@@ -199,6 +205,12 @@ const X = {
     okxErr: (c) => ({ insufficient_usdt: "الـUSDT ما كافيش ف OKX.", below_min_size: "المبلغ صغير بزاف على OKX.", plan_out_of_date: "الثمن تبدل بزاف، طلب خطة جديدة.", instrument_not_found: "هاد العملة ما كايناش ف OKX مقابل USDT.", nothing_to_sell: "ما كاين والو باش يتباع.", network: "مشكل ف الاتصال بـOKX.", "50113": "المفاتيح غالطين (Secret).", "50111": "API key غالط.", "50105": "Passphrase غالط.", "50101": "هاد المفتاح ماشي ديال هاد الوضع (Demo/Live).", "50119": "API key ما كاينش.", "51008": "الرصيد ما كافيش." }[c] || "خطأ من OKX: " + c),
   },
   ar: {
+    pendingTitle: "⏳ أوامر تنتظر السعر", noPending: "لا توجد أوامر منتظرة.", cancelOrder: "إلغاء",
+    pendingLine: (p, last) => `${p.instId.replace("-USDT", "")} · شراء عند ${p.entry} · الآن ${last ?? "…"}${last ? ` (متبقٍ ${(((last - p.entry) / last) * 100).toFixed(2)}%)` : ""} · ${p.usdt} USDT · SL ${p.sl} · TP ${p.tp}`,
+    pendingPlaced: (b, p) => `⏳ وضعت أمر شراء على ${b}: سأشتري عندما ينزل السعر إلى ${p.entry} (−${p.distPct}% من الآن)، بمبلغ ${p.usdt} USDT.\nSL ${p.stopLoss} · TP ${p.takeProfit} · صالح ${p.expiryHours} ساعة.\nالأمر في OKX على مدار الساعة، ويمكنك متابعته أو إلغاؤه من «المحفظة».\n\n${p.summary || ""}`,
+    pendingFilled: (b, px) => `✅ ${b}: وصل السعر إلى ${px} وتم الشراء. وقف الخسارة وجني الأرباح فعّالان في OKX.`, pendingExpired: (b) => `⌛ ${b}: لم يصل السعر في الوقت المحدد، ألغيت الأمر.`, pendingCanceled: (b) => `🗑️ ${b}: أُلغي الأمر.`,
+    ordersCanceled: (n) => `🗑️ ألغيت ${n} أمرًا منتظرًا.`, nowBadNote: "⚠️ اشتريت لأنك طلبت الآن، لكن الذكاء الاصطناعي يرى أن التوقيت ليس جيدًا:",
+    freeUp: (sold, sz, est, b) => `💱 رصيد USDT غير كافٍ، سأبيع ${sz} ${sold} (≈${est} USDT، أضعف عملة لديك الآن) لشراء ${b}.`,
     newChat: "محادثة جديدة", chatHistory: "المحادثات", noChats: "لا توجد محادثات محفوظة بعد.", deleteChat: "حذف المحادثة",
     missionTitle: "🎯 مهمة البوت", missionStop: "إيقاف المهمة", missionNone: "لا توجد مهمة. قل للبوت مثلًا: «لدي 93 USDT، اشترِ وبِع بنفسك، أريد 10% في 7 أيام».",
     missionLine: (m, pnl, dl) => `الهدف +${m.targetPct}% في ${m.days} أيام · الآن ${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}% · متبقٍ ${dl} يوم · أقصى خسارة -${m.maxLossPct}% · رأس المال ${m.capital} USDT`,
@@ -236,6 +248,12 @@ const X = {
     okxErr: (c) => ({ insufficient_usdt: "رصيد USDT غير كافٍ في OKX.", below_min_size: "المبلغ أصغر من الحد الأدنى في OKX.", plan_out_of_date: "تغير السعر كثيرًا، اطلب خطة جديدة.", instrument_not_found: "هذه العملة غير متاحة مقابل USDT في OKX.", nothing_to_sell: "لا يوجد ما يُباع.", network: "مشكلة في الاتصال بـOKX.", "50113": "المفتاح السري غير صحيح.", "50111": "API key غير صحيح.", "50105": "Passphrase غير صحيح.", "50101": "هذا المفتاح لا يطابق الوضع (تجريبي/حقيقي).", "50119": "API key غير موجود.", "51008": "الرصيد غير كافٍ." }[c] || "خطأ من OKX: " + c),
   },
   fr: {
+    pendingTitle: "⏳ Ordres en attente", noPending: "Aucun ordre en attente.", cancelOrder: "Annuler",
+    pendingLine: (p, last) => `${p.instId.replace("-USDT", "")} · achat à ${p.entry} · actuel ${last ?? "…"}${last ? ` (reste ${(((last - p.entry) / last) * 100).toFixed(2)}%)` : ""} · ${p.usdt} USDT · SL ${p.sl} · TP ${p.tp}`,
+    pendingPlaced: (b, p) => `⏳ Ordre d'achat placé sur ${b} : j'achète si le prix descend à ${p.entry} (−${p.distPct}%), pour ${p.usdt} USDT.\nSL ${p.stopLoss} · TP ${p.takeProfit} · valable ${p.expiryHours} h.\nL'ordre est sur OKX 24h/24 ; suis-le ou annule-le dans « Portefeuille ».\n\n${p.summary || ""}`,
+    pendingFilled: (b, px) => `✅ ${b} : prix atteint (${px}), achat exécuté. SL/TP actifs sur OKX.`, pendingExpired: (b) => `⌛ ${b} : prix non atteint à temps, ordre annulé.`, pendingCanceled: (b) => `🗑️ ${b} : ordre annulé.`,
+    ordersCanceled: (n) => `🗑️ ${n} ordre(s) annulé(s).`, nowBadNote: "⚠️ Acheté car tu as demandé maintenant, mais l'IA trouve le moment peu favorable :",
+    freeUp: (sold, sz, est, b) => `💱 USDT insuffisant : je vends ${sz} ${sold} (≈${est} USDT, ta crypto la plus faible) pour acheter ${b}.`,
     newChat: "Nouveau chat", chatHistory: "Historique", noChats: "Aucune conversation enregistrée.", deleteChat: "Supprimer",
     missionTitle: "🎯 Mission du bot", missionStop: "Arrêter la mission", missionNone: "Aucune mission. Dis au bot par ex. : « J'ai 93 USDT, achète et vends tout seul, je veux 10 % en 7 jours ».",
     missionLine: (m, pnl, dl) => `Objectif +${m.targetPct}% en ${m.days} j · actuel ${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}% · reste ${dl} j · perte max -${m.maxLossPct}% · capital ${m.capital} USDT`,
@@ -273,6 +291,12 @@ const X = {
     okxErr: (c) => ({ insufficient_usdt: "USDT insuffisant sur OKX.", below_min_size: "Montant sous le minimum OKX.", plan_out_of_date: "Le prix a trop bougé, demande un nouveau plan.", instrument_not_found: "Paire USDT introuvable sur OKX.", nothing_to_sell: "Rien à vendre.", network: "Problème de connexion à OKX.", "50113": "Secret incorrect.", "50111": "API key incorrecte.", "50105": "Passphrase incorrecte.", "50101": "Clé ne correspond pas au mode (Démo/Réel).", "50119": "API key inexistante.", "51008": "Solde insuffisant." }[c] || "Erreur OKX : " + c),
   },
   en: {
+    pendingTitle: "⏳ Orders waiting for price", noPending: "No waiting orders.", cancelOrder: "Cancel",
+    pendingLine: (p, last) => `${p.instId.replace("-USDT", "")} · buy at ${p.entry} · now ${last ?? "…"}${last ? ` (${(((last - p.entry) / last) * 100).toFixed(2)}% away)` : ""} · ${p.usdt} USDT · SL ${p.sl} · TP ${p.tp}`,
+    pendingPlaced: (b, p) => `⏳ Placed a buy order on ${b}: I'll buy if price drops to ${p.entry} (−${p.distPct}% from now), for ${p.usdt} USDT.\nSL ${p.stopLoss} · TP ${p.takeProfit} · valid ${p.expiryHours} h.\nThe order sits on OKX 24/7; track or cancel it in Portfolio.\n\n${p.summary || ""}`,
+    pendingFilled: (b, px) => `✅ ${b}: price reached ${px} and the buy filled. Stop-loss and take-profit are live on OKX.`, pendingExpired: (b) => `⌛ ${b}: price didn't reach the level in time; order cancelled.`, pendingCanceled: (b) => `🗑️ ${b}: order cancelled.`,
+    ordersCanceled: (n) => `🗑️ Cancelled ${n} waiting order(s).`, nowBadNote: "⚠️ Bought because you asked for now, but the AI thinks the timing isn't great:",
+    freeUp: (sold, sz, est, b) => `💱 Not enough USDT: I'll sell ${sz} ${sold} (≈${est} USDT, your weakest coin right now) to buy ${b}.`,
     newChat: "New chat", chatHistory: "Chats", noChats: "No saved chats yet.", deleteChat: "Delete chat",
     missionTitle: "🎯 Bot mission", missionStop: "Stop mission", missionNone: "No mission. Tell the bot e.g.: \"I have 93 USDT, buy and sell by yourself, I want 10% in 7 days\".",
     missionLine: (m, pnl, dl) => `Target +${m.targetPct}% in ${m.days} days · now ${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}% · ${dl} days left · max loss -${m.maxLossPct}% · capital ${m.capital} USDT`,
@@ -470,6 +494,20 @@ function createOkx({ key, secret, passphrase, demo = true }, fetchImpl = fetch) 
       return d[0].algoId;
     },
     async cancelAlgo(instId, algoId) { return raw("POST", "/api/v5/trade/cancel-algos", [{ instId, algoId }]); },
+    // Limit buy that waits on the OKX order book (24/7) with TP/SL attached: they activate on OKX as soon as it fills.
+    async limitBuy(instId, px, sz, tp, sl) {
+      const d = await raw("POST", "/api/v5/trade/order", { instId, tdMode: "cash", side: "buy", ordType: "limit", px: String(px), sz: String(sz), tag: "kimmarket",
+        attachAlgoOrds: [{ tpTriggerPx: String(tp), tpOrdPx: "-1", slTriggerPx: String(sl), slOrdPx: "-1" }] });
+      return d[0].ordId;
+    },
+    async cancelOrder(instId, ordId) { return raw("POST", "/api/v5/trade/cancel-order", { instId, ordId }); },
+    async algosPending(instId) {
+      const out = [];
+      for (const ordType of ["oco", "conditional"]) {
+        try { const d = await raw("GET", `/api/v5/trade/orders-algo-pending?ordType=${ordType}&instType=SPOT&instId=${encodeURIComponent(instId)}`); d.forEach((a) => out.push({ algoId: a.algoId, sz: parseFloat(a.sz) || 0, tag: a.tag || "", cTime: parseInt(a.cTime, 10) || 0, ordType })); } catch {}
+      }
+      return out.sort((a, b) => b.cTime - a.cTime);
+    },
   };
   return api;
 }
@@ -513,9 +551,13 @@ async function executePlan(okx, { base, usdt, takeProfit, stopLoss }, wait = sle
   return log;
 }
 
-// Close a KimMarket trade: cancel its OCO, then market-sell the quantity it bought.
+// Close a KimMarket trade: cancel its OCO (or the TP/SL attached to a filled limit order), then market-sell what it bought.
 async function closeTrade(okx, trade) {
   if (trade.algoId) { try { await okx.cancelAlgo(trade.instId, trade.algoId); } catch {} }
+  else if (okx.algosPending) {
+    const mine = (await okx.algosPending(trade.instId)).filter((a) => a.tag === "kimmarket" || Math.abs(a.sz - (trade.qty || 0)) <= (trade.qty || 0) * 0.02);
+    for (const a of mine) { try { await okx.cancelAlgo(trade.instId, a.algoId); } catch {} }
+  }
   const inst = await okx.instrument(trade.instId);
   const base = trade.instId.split("-")[0];
   const bal = await okx.balances();
@@ -586,6 +628,69 @@ async function scanMarket(fetchImpl = fetch, { minVol = 1e7, max = 6 } = {}) {
   return out.filter((x) => x.score >= 3).sort((a, b) => b.score - a.score || b.vol24 - a.vol24).slice(0, max);
 }
 
+
+// ---------------------------------------------------------------- waiting (limit) entries
+// Place a limit buy at the AI's entry price; OKX keeps it 24/7 and activates TP/SL on fill.
+async function placeEntry(okx, { base, usdt, entry, takeProfit, stopLoss, expiryHours = 24 }) {
+  const instId = `${base}-USDT`;
+  const inst = await okx.instrument(instId);
+  const last = await okx.ticker(instId);
+  if (!(entry < last)) throw new OkxError("entry_above_price", "entry_above_price", { last });
+  if (!(stopLoss < entry && entry < takeProfit)) throw new OkxError("plan_out_of_date", "plan_out_of_date");
+  const bal = await okx.balances();
+  const free = (bal.ccy.USDT && bal.ccy.USDT.avail) || 0;
+  if (free < usdt) throw new OkxError("insufficient_usdt", "insufficient_usdt", { free });
+  const px = roundTo(entry, inst.tickSz);
+  const sz = floorTo(usdt / parseFloat(px), inst.lotSz);
+  if (parseFloat(sz) < inst.minSz) throw new OkxError("below_min_size", "below_min_size", { minSz: inst.minSz });
+  const tp = roundTo(takeProfit, inst.tickSz), sl = roundTo(stopLoss, inst.tickSz);
+  const ordId = await okx.limitBuy(instId, px, sz, tp, sl);
+  return { kind: "pending", instId, ordId, entry: parseFloat(px), sz: parseFloat(sz), tp, sl, usdt, demo: okx.demo, ts: Date.now(), expiresAt: Date.now() + expiryHours * 3600000, lastPx: last };
+}
+
+// Check a waiting order: still waiting, filled (-> becomes a trade), canceled, or expired (we cancel it).
+async function checkPending(okx, p) {
+  const o = await okx.order(p.instId, p.ordId);
+  if (o.state === "filled" || (o.state === "canceled" && o.filled > 0)) {
+    const base = p.instId.split("-")[0];
+    let algoId = null;
+    try { const al = await okx.algosPending(p.instId); const m = al.find((a) => Math.abs(a.sz - o.filled) <= o.filled * 0.03) || al[0]; algoId = m ? m.algoId : null; } catch {}
+    return { state: "filled", trade: { instId: p.instId, demo: p.demo, ts: Date.now(), usdt: p.usdt, fill: o, qty: o.filled + (o.feeCcy === base ? o.fee : 0), tp: p.tp, sl: p.sl, algoId, open: true, source: "limit" } };
+  }
+  if (o.state === "canceled" || o.state === "mmp_canceled") return { state: "canceled" };
+  if (Date.now() > p.expiresAt && o.filled === 0) { try { await okx.cancelOrder(p.instId, p.ordId); } catch {} return { state: "expired" }; }
+  let lastPx = p.lastPx; try { lastPx = await okx.ticker(p.instId); } catch {}
+  return { state: "waiting", lastPx };
+}
+
+// Not enough USDT? Sell (part of) the weakest coin the user holds. Coins locked in open trades are skipped.
+async function freeUpUsdt(okx, needUsdt, { exclude = [] } = {}, fetchImpl = fetch) {
+  const bal = await okx.balances();
+  const have = (bal.ccy.USDT && bal.ccy.USDT.avail) || 0;
+  const missing = needUsdt - have;
+  if (missing <= 0) return { sold: null, missing: 0 };
+  const holds = Object.entries(bal.ccy).filter(([c, v]) => c !== "USDT" && !exclude.includes(c) && v.avail > 0 && v.eq > 0 && (v.usd * v.avail / v.eq) >= 1)
+    .map(([c, v]) => ({ ccy: c, avail: v.avail, usdAvail: v.usd * v.avail / v.eq }));
+  if (!holds.length) throw new OkxError("nothing_to_sell", "nothing_to_sell");
+  for (const h of holds) {
+    try {
+      const k = await fetchImpl(`https://www.okx.com/api/v5/market/candles?instId=${h.ccy}-USDT&bar=1H&limit=100`).then((r) => r.json());
+      const closes = (k.data || []).map((row) => parseFloat(row[4])).reverse();
+      h.score = closes.length >= 60 ? scoreCandles(closes).score : 0;
+    } catch { h.score = 0; }
+  }
+  const enough = holds.filter((h) => h.usdAvail >= missing * 1.03);
+  const pick = (enough.length ? enough : holds).sort((a, b) => a.score - b.score || b.usdAvail - a.usdAvail)[0];
+  const instId = `${pick.ccy}-USDT`;
+  const inst = await okx.instrument(instId);
+  const last = await okx.ticker(instId);
+  const wantBase = Math.min(pick.avail, (missing * 1.03) / last);
+  const sz = floorTo(Math.max(wantBase, inst.minSz), inst.lotSz);
+  if (parseFloat(sz) > pick.avail || parseFloat(sz) < inst.minSz) throw new OkxError("nothing_to_sell", "nothing_to_sell");
+  return { sold: pick.ccy, sz: parseFloat(sz), estUsdt: +(parseFloat(sz) * last).toFixed(2), score: pick.score, instId, missing: +missing.toFixed(2) };
+}
+async function sellForUsdt(okx, plan) { return okx.marketSell(plan.instId, plan.sz); }
+
 // ===== App
 
 const API = "https://market-qa-bot.shopecom11992.workers.dev/api";
@@ -638,6 +743,30 @@ export default function App() {
   const refreshBal = useCallback(async () => { if (!okx) { setOkxBal(null); return null; } try { const b = await okx.balances(); setOkxBal(b); return b; } catch { return null; } }, [okx]);
   const tradesRef = useRef(okxTrades); tradesRef.current = okxTrades;
   const langRef = useRef(lang); langRef.current = lang;
+  const [okxPending, setOkxPendingState] = useState([]);
+  const pendingRef = useRef(okxPending); pendingRef.current = okxPending;
+  const setOkxPending = (fn) => setOkxPendingState((prev) => { const n = typeof fn === "function" ? fn(prev) : fn; pendingRef.current = n; store.set("okxPending", n); return n; });
+  const cancelPending = async (filter = () => true) => {
+    const list = pendingRef.current.filter((p) => okx && p.demo === okx.demo && filter(p));
+    for (const p of list) { try { await okx.cancelOrder(p.instId, p.ordId); } catch {} }
+    setOkxPending((prev) => prev.filter((p) => !list.includes(p)));
+    refreshBal();
+    return list.length;
+  };
+  // Every minute: is a waiting order filled / expired? Update its live price.
+  const pollPending = async () => {
+    if (!okx) return;
+    const tt = strings(langRef.current);
+    for (const p of pendingRef.current.filter((x) => x.demo === okx.demo)) {
+      try {
+        const r = await checkPending(okx, p);
+        const base = p.instId.split("-")[0];
+        if (r.state === "filled") { setOkxTrades((prev) => [{ ...r.trade, symbol: p.symbol }, ...prev]); setOkxPending((prev) => prev.filter((x) => x.ordId !== p.ordId)); addEvent(tt.pendingFilled(base, r.trade.fill.avgPx)); }
+        else if (r.state === "expired" || r.state === "canceled") { setOkxPending((prev) => prev.filter((x) => x.ordId !== p.ordId)); addEvent(r.state === "expired" ? tt.pendingExpired(base) : tt.pendingCanceled(base)); }
+        else setOkxPending((prev) => prev.map((x) => (x.ordId === p.ordId ? { ...x, lastPx: r.lastPx } : x)));
+      } catch {}
+    }
+  };
   const [mission, setMissionState] = useState(null);
   const missionRef = useRef(mission); missionRef.current = mission;
   const setMission = (m) => { missionRef.current = m; setMissionState(m); store.set("mission", m); };
@@ -710,7 +839,7 @@ export default function App() {
   };
 
   const okxProps = { okx, okxCreds, setOkxCreds, okxCfg, setOkxCfg, okxTrades, setOkxTrades, okxBal, refreshBal, okxEvents, addEvent,
-    mission, startMission, stopMission, scanAndPick, openPosition, closeOpen };
+    mission, startMission, stopMission, scanAndPick, openPosition, closeOpen, okxPending, setOkxPending, cancelPending };
 
   // Live OKX balance (every 60 s) + AI trade manager (every 5 min) while the app is open.
   useEffect(() => {
@@ -741,7 +870,8 @@ export default function App() {
       if (!stop && missionCycleRef.current) await missionCycleRef.current();
     };
     manage();
-    const balTimer = setInterval(refreshBal, 60000), mgrTimer = setInterval(manage, 300000);
+    pollPending();
+    const balTimer = setInterval(() => { refreshBal(); pollPending(); }, 60000), mgrTimer = setInterval(manage, 300000);
     return () => { stop = true; clearInterval(balTimer); clearInterval(mgrTimer); };
   }, [okx]); // eslint-disable-line react-hooks/exhaustive-deps
   const t = strings(lang), rtl = isRTL(lang);
@@ -753,6 +883,7 @@ export default function App() {
     setOkxTradesState(await store.get("okxTrades", []));
     setOkxEventsState(await store.get("okxEvents", []));
     setMissionState(await store.get("mission", null));
+    setOkxPendingState(await store.get("okxPending", []));
     const pp = await store.get("paper", null);
     if (pp) setPaperState(await runPaperBot(pp, strings(await store.get("lang", "darija")))); // bot catches up on news since last open
     const s = await store.get("sub", { trialStart: null, plan: null });
@@ -893,7 +1024,7 @@ function Chat({ t, rtl, lang, seed, okxProps }) {
   const [busy, setBusy] = useState(false);
   const listRef = useRef(null);
   const actions = useRef({});
-  const { okx, okxCfg, okxTrades, setOkxTrades, refreshBal, okxBal, mission, startMission, stopMission, scanAndPick, openPosition, closeOpen } = okxProps;
+  const { okx, okxCfg, okxTrades, setOkxTrades, refreshBal, okxBal, mission, startMission, stopMission, scanAndPick, openPosition, closeOpen, setOkxPending, addEvent, okxPending, cancelPending } = okxProps;
   const askLive = (text, label, fn) => { const id = "act" + Date.now(); actions.current[id] = fn; say(text + "\n\n" + t.chatConfirmLive, { action: { id, label } }); };
 
   const say = (text, extra) => setMsgs((m) => [...m.filter((x) => !x.pending), { id: "b" + Date.now() + Math.random(), me: false, text, ...extra }]);
@@ -918,28 +1049,49 @@ function Chat({ t, rtl, lang, seed, okxProps }) {
       const id = "act" + Date.now(); actions.current[id] = doClose;
       return say(t.chatCloseConfirm(base) + "\n" + t.chatConfirmLive, { action: { id, label: t.closeTrade } });
     }
+    // when = "now": buy immediately (AI still sets SL/TP). when = "best": AI buys now, or places a limit order at a better price, or skips.
+    const mode = ti.when === "now" ? "now" : "smart";
     let plan;
-    try { plan = (await api("/plan", { method: "POST", body: JSON.stringify({ symbol: a.symbol, name: a.name, cgId: a.cgId, type: "crypto", lang }) })).plan; }
+    try { plan = (await api("/plan", { method: "POST", body: JSON.stringify({ symbol: a.symbol, name: a.name, cgId: a.cgId, type: "crypto", lang, mode }) })).plan; }
     catch (e) { return say(t.error); }
-    if (plan.action !== "buy") return say(t.chatPlanWait(base, plan.summary || ""));
-    let free = 0;
-    try { const b = await okx.balances(); free = (b.ccy.USDT && b.ccy.USDT.avail) || 0; } catch (e) { return okxFail(e); }
-    const usdt = Math.floor(free * (okxCfg.pct || 10)) / 100;
-    if (!(usdt > 0)) return say(t.okxErr("insufficient_usdt"));
-    const doOpen = async () => {
-      try {
-        const log = await executePlan(okx, { base, usdt, takeProfit: plan.takeProfit, stopLoss: plan.stopLoss });
-        if (log.fill) setOkxTrades((prev) => [{ ...log, symbol: a.symbol, open: true, source: "chat" }, ...prev]);
-        if (log.error === "oco_failed" || log.error === "oco_too_small") say(t.ocoFailed);
-        else if (log.error) say(t.okxErr(log.error));
-        else say(t.done(log.qty, base, fmtPrice(log.fill.avgPx)));
-        refreshBal();
-      } catch (e) { okxFail(e); }
+    if (plan.action !== "buy" && plan.action !== "limit") return say(t.chatPlanWait(base, plan.summary || ""));
+    let bal;
+    try { bal = await okx.balances(); } catch (e) { return okxFail(e); }
+    const free = (bal.ccy.USDT && bal.ccy.USDT.avail) || 0;
+    let usdt = Math.floor(free * (okxCfg.pct || 10)) / 100;
+    let sale = null;
+    if (usdt < 5) { // not enough USDT: plan selling the weakest coin
+      usdt = Math.max(5, Math.floor(bal.totalUsd * (okxCfg.pct || 10)) / 100);
+      try { sale = await freeUpUsdt(okx, usdt, { exclude: [base] }); } catch (e) { return okxFail(e); }
+      if (sale.sold === null) sale = null;
+    }
+    const finish = (log) => {
+      if (log.fill) setOkxTrades((prev) => [{ ...log, symbol: a.symbol, open: true, source: "chat" }, ...prev]);
+      if (log.error === "oco_failed" || log.error === "oco_too_small") say(t.ocoFailed);
+      else if (log.error) say(t.okxErr(log.error));
+      else say(t.done(log.qty, base, fmtPrice(log.fill.avgPx)));
     };
-    const text = t.chatPlanBuy(base, fmtMoney(usdt), plan) + "\n\n" + t.planDisclaimer;
-    if (!live) { say(text); return doOpen(); }
-    const id = "act" + Date.now(); actions.current[id] = doOpen;
-    say(text + "\n\n" + t.chatConfirmLive, { action: { id, label: t.confirmBtn } });
+    const doIt = async () => {
+      try {
+        if (sale) { await sellForUsdt(okx, sale); await new Promise((r) => setTimeout(r, 1200)); addEvent(t.freeUp(sale.sold, sale.sz, sale.estUsdt, base)); }
+        if (plan.action === "limit") {
+          const p2 = await placeEntry(okx, { base, usdt, entry: plan.entry, takeProfit: plan.takeProfit, stopLoss: plan.stopLoss, expiryHours: plan.expiryHours });
+          setOkxPending((prev) => [{ ...p2, symbol: a.symbol }, ...prev]);
+          say(t.pendingPlaced(base, { ...plan, usdt }));
+        } else finish(await executePlan(okx, { base, usdt, takeProfit: plan.takeProfit, stopLoss: plan.stopLoss }));
+        refreshBal();
+      } catch (e) {
+        if (e.code === "entry_above_price") { try { finish(await executePlan(okx, { base, usdt, takeProfit: plan.takeProfit, stopLoss: plan.stopLoss })); } catch (e2) { okxFail(e2); } }
+        else okxFail(e);
+      }
+    };
+    let text = plan.action === "limit" ? "" : t.chatPlanBuy(base, fmtMoney(usdt), plan);
+    if (mode === "now" && plan.action === "buy" && (plan.defaultLevels || (plan.confidence === "low"))) text = t.nowBadNote + "\n" + (plan.summary || "") + "\n\n" + text;
+    if (sale) text = t.freeUp(sale.sold, sale.sz, sale.estUsdt, base) + (text ? "\n\n" + text : "");
+    if (text) text += "\n\n" + t.planDisclaimer;
+    if (!live) { if (text) say(text); return doIt(); }
+    const id = "act" + Date.now(); actions.current[id] = doIt;
+    say((text || t.pendingPlaced(base, { ...plan, usdt })) + "\n\n" + t.chatConfirmLive, { action: { id, label: t.confirmBtn } });
   };
 
   const runAction = async (m) => {
@@ -958,6 +1110,7 @@ function Chat({ t, rtl, lang, seed, okxProps }) {
     const usdtFree = okxBal && okxBal.ccy.USDT ? okxBal.ccy.USDT.avail : null;
     const ctx = { connected: !!okx, demo: okx ? okx.demo : null, balanceUsd: okxBal ? +okxBal.totalUsd.toFixed(2) : null, usdtFree: usdtFree != null ? +usdtFree.toFixed(2) : null,
       openTrades: okxTrades.filter((x) => x.open && okx && x.demo === okx.demo).map((x) => ({ coin: x.instId, qty: x.qty, entry: x.fill && x.fill.avgPx, sl: x.sl, tp: x.tp, byMission: !!x.mission })),
+      waitingOrders: (okxPending || []).filter((p) => okx && p.demo === okx.demo).map((p) => ({ coin: p.instId, buyAt: p.entry, now: p.lastPx, usdt: p.usdt })),
       mission: mission && mission.active ? { capital: mission.capital, targetPct: mission.targetPct, days: mission.days, pnlPct: +(mission.pnl || 0).toFixed(2), daysLeft: Math.max(0, Math.ceil((mission.endsAt - Date.now()) / 86400000)) } : null };
     const history = msgs.filter((x) => !x.pending && x.id !== "hello").slice(-8).map((x) => ({ me: x.me, text: String(x.text).slice(0, 300) }));
     let res;
@@ -968,7 +1121,11 @@ function Chat({ t, rtl, lang, seed, okxProps }) {
     try {
       if (a.type === "open" || a.type === "close") {
         if (reply) say(reply);
-        await tradeCommand({ intent: a.type, asset: res.asset });
+        await tradeCommand({ intent: a.type, asset: res.asset, when: a.when });
+      } else if (a.type === "cancel_orders") {
+        if (reply) say(reply);
+        const n = await cancelPending(a.symbol ? (p) => p.instId.startsWith(a.symbol + "-") : () => true);
+        say(n ? t.ordersCanceled(n) : t.noPending);
       } else if (a.type === "close_all") {
         if (reply) say(reply);
         if (!okx) say(t.notConnected);
@@ -1430,7 +1587,7 @@ function TradePlan({ t, rtl, lang, asset, base, isCrypto, okx, okxCreds, okxCfg,
 
 
 // ------------------------------------------------------------------ Real OKX wallet (live balance) + AI manager activity
-function OkxWallet({ t, rtl, okx, okxBal, refreshBal, okxTrades, okxEvents, mission, stopMission }) {
+function OkxWallet({ t, rtl, okx, okxBal, refreshBal, okxTrades, okxEvents, mission, stopMission, okxPending, cancelPending }) {
   const [busy, setBusy] = useState(false);
   const coins = okxBal ? Object.entries(okxBal.ccy).filter(([, v]) => v.eq > 0 && (v.usd >= 0.5 || v.eq >= 1)).sort((a, b) => b[1].usd - a[1].usd) : [];
   const open = okxTrades.filter((x) => x.open && x.demo === okx.demo);
@@ -1454,6 +1611,15 @@ function OkxWallet({ t, rtl, okx, okxBal, refreshBal, okxTrades, okxEvents, miss
         {open.map((tr) => (
           <Text key={tr.ts} style={[st.sub, { marginTop: 4 }, rtl && st.rtl]}>{tr.instId} · {fmtQty(tr.qty || 0)} @ {tr.fill ? fmtPrice(tr.fill.avgPx) : "—"}{tr.sl ? ` · SL ${tr.sl} · TP ${tr.tp}` : ""}</Text>
         ))}
+      </View>
+      <Text style={[st.label, { marginTop: 12 }, rtl && st.rtl]}>{t.pendingTitle}</Text>
+      <View style={st.card}>
+        {(okxPending || []).filter((p) => p.demo === okx.demo).length ? (okxPending || []).filter((p) => p.demo === okx.demo).map((p) => (
+          <View key={p.ordId} style={[st.row, rtl && st.rowRev, { alignItems: "center", gap: 8, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: C.line }]}>
+            <Text style={[st.body, { marginTop: 0, flex: 1, fontSize: 13 }, rtl && st.rtl]}>{t.pendingLine(p, p.lastPx)}</Text>
+            <Pressable style={[st.chip, { paddingVertical: 4 }]} onPress={() => cancelPending((x) => x.ordId === p.ordId)}><Text style={[st.chipText, { color: C.red }]}>{t.cancelOrder}</Text></Pressable>
+          </View>
+        )) : <Text style={[st.sub, rtl && st.rtl]}>{t.noPending}</Text>}
       </View>
       <Text style={[st.label, { marginTop: 12 }, rtl && st.rtl]}>{t.missionTitle}</Text>
       <View style={st.card}>
