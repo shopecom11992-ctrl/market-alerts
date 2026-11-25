@@ -3,12 +3,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator, FlatList, KeyboardAvoidingView, Linking, Platform, Pressable, RefreshControl,
-  SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TextInput, View,
+  SafeAreaView, ScrollView, StatusBar, StyleSheet, Switch, Text, TextInput, View,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import Svg, { Defs, Line, LinearGradient, Path, Stop, Text as SvgText } from "react-native-svg";
+import * as SecureStore from "expo-secure-store";
 import { LANGS, isRTL, strings } from "./i18n";
+import { createOkx, executePlan, closeTrade, floorTo } from "./okx";
 
 const API = "https://market-qa-bot.shopecom11992.workers.dev/api";
 const HDR = { "Content-Type": "application/json", "X-App": "kimmarket" };
@@ -22,6 +24,13 @@ const C = { bg: "#0B0F14", card: "#141A22", card2: "#1B2330", line: "#243041", t
 const store = {
   async get(k, d) { try { const v = await AsyncStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
   async set(k, v) { try { await AsyncStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+
+// OKX keys: encrypted device keychain only (never AsyncStorage, never our server)
+const secure = {
+  async get() { try { const v = await SecureStore.getItemAsync("okx_creds"); return v ? JSON.parse(v) : null; } catch { return null; } },
+  async set(c) { try { await SecureStore.setItemAsync("okx_creds", JSON.stringify(c)); } catch {} },
+  async del() { try { await SecureStore.deleteItemAsync("okx_creds"); } catch {} },
 };
 
 async function api(path, opt = {}) {
@@ -41,10 +50,20 @@ export default function App() {
   const [chatSeed, setChatSeed] = useState(null);
   const [paper, setPaperState] = useState(PAPER0());
   const setPaper = (p) => { if (p) { setPaperState(p); store.set("paper", p); } };
+  const [okxCreds, setOkxCreds] = useState(null);
+  const [okxCfg, setOkxCfgState] = useState({ pct: 10 });
+  const [okxTrades, setOkxTradesState] = useState([]);
+  const setOkxCfg = (c) => { setOkxCfgState(c); store.set("okxCfg", c); };
+  const setOkxTrades = (fn) => setOkxTradesState((prev) => { const n = typeof fn === "function" ? fn(prev) : fn; store.set("okxTrades", n.slice(0, 50)); return n; });
+  const okx = useMemo(() => (okxCreds ? createOkx(okxCreds) : null), [okxCreds]);
+  const okxProps = { okx, okxCreds, setOkxCreds, okxCfg, setOkxCfg, okxTrades, setOkxTrades };
   const t = strings(lang), rtl = isRTL(lang);
 
   useEffect(() => { (async () => {
     setLang(await store.get("lang", "darija"));
+    setOkxCreds(await secure.get());
+    setOkxCfgState(await store.get("okxCfg", { pct: 10 }));
+    setOkxTradesState(await store.get("okxTrades", []));
     const pp = await store.get("paper", null);
     if (pp) setPaperState(await runPaperBot(pp, strings(await store.get("lang", "darija")))); // bot catches up on news since last open
     const s = await store.get("sub", { trialStart: null, plan: null });
@@ -78,9 +97,9 @@ export default function App() {
       <View style={st.fill}>
         {tab === "alerts" && <Alerts t={t} rtl={rtl} />}
         {tab === "chat" && <Chat t={t} rtl={rtl} lang={lang} seed={chatSeed} />}
-        {tab === "markets" && <Markets t={t} rtl={rtl} onAnalyse={askAbout} paper={paper} setPaper={setPaper} />}
+        {tab === "markets" && <Markets t={t} rtl={rtl} lang={lang} onAnalyse={askAbout} paper={paper} setPaper={setPaper} okxProps={okxProps} />}
         {tab === "portfolio" && <Portfolio t={t} rtl={rtl} paper={paper} setPaper={setPaper} />}
-        {tab === "settings" && <Settings t={t} rtl={rtl} lang={lang} onLang={changeLang} sub={sub} daysLeft={daysLeft} onPlans={() => setShowPaywall(true)} />}
+        {tab === "settings" && <Settings t={t} rtl={rtl} lang={lang} onLang={changeLang} sub={sub} daysLeft={daysLeft} onPlans={() => setShowPaywall(true)} okxProps={okxProps} />}
       </View>
       <View style={[st.tabs, rtl && st.rowRev]}>
         {[["alerts", "notifications", t.tabAlerts], ["chat", "chatbubbles", t.tabChat], ["markets", "stats-chart", t.tabMarkets], ["portfolio", "wallet", t.tabPortfolio], ["settings", "settings", t.tabSettings]].map(([k, icon, label]) => (
@@ -194,7 +213,7 @@ function Chat({ t, rtl, lang, seed }) {
 // ------------------------------------------------------------------ Markets: search anything + watchlist
 const DEFAULT_WATCH = [{ symbol: "BTC-USD", name: "Bitcoin", type: "crypto", cgId: "bitcoin", base: "BTC" }, { symbol: "NVDA", name: "NVIDIA", type: "stock" }, { symbol: "GC=F", name: "Gold", type: "commodity" }];
 
-function Markets({ t, rtl, onAnalyse, paper, setPaper }) {
+function Markets({ t, rtl, lang, onAnalyse, paper, setPaper, okxProps }) {
   const [list, setList] = useState([]);
   const [quotes, setQuotes] = useState({});
   const [q, setQ] = useState("");
@@ -219,7 +238,7 @@ function Markets({ t, rtl, onAnalyse, paper, setPaper }) {
   };
   const refresh = async () => { setRefreshing(true); await loadQuotes(list); setRefreshing(false); };
 
-  if (asset) return <AssetView t={t} rtl={rtl} asset={asset} onBack={() => setAsset(null)} onAnalyse={onAnalyse}
+  if (asset) return <AssetView t={t} rtl={rtl} lang={lang} okxProps={okxProps} asset={asset} onBack={() => setAsset(null)} onAnalyse={onAnalyse}
     inWatch={list.some((x) => x.symbol === asset.symbol)} onToggleWatch={() => toggleWatch(asset)} paper={paper} setPaper={setPaper} />;
 
   return (
@@ -280,7 +299,7 @@ const EXCHANGES = [
   ["Coinbase", (b) => `https://www.coinbase.com/advanced-trade/spot/${b}-USD`],
 ];
 
-function AssetView({ t, rtl, asset, onBack, onAnalyse, inWatch, onToggleWatch, paper, setPaper }) {
+function AssetView({ t, rtl, lang, asset, onBack, onAnalyse, inWatch, onToggleWatch, paper, setPaper, okxProps }) {
   const [range, setRange] = useState("1mo");
   const [chart, setChart] = useState(null);
   const [amount, setAmount] = useState("500");
@@ -348,6 +367,7 @@ function AssetView({ t, rtl, asset, onBack, onAnalyse, inWatch, onToggleWatch, p
           <Text style={[st.sub, { marginTop: 8, fontSize: 12 }, rtl && st.rtl]}>{t.openInNote}</Text>
         </View>
       ) : null}
+      <TradePlan t={t} rtl={rtl} lang={lang} asset={asset} base={base} isCrypto={isCrypto} {...okxProps} />
       <View style={[st.card, { marginTop: 12 }]}>
         <Text style={[st.label, rtl && st.rtl]}>{t.pfTitle} · {t.cash}: ${fmtMoney(paper.cash)}</Text>
         {pos ? <Text style={[st.body, { marginTop: 0, marginBottom: 8 }, rtl && st.rtl]}>{fmtQty(pos.qty)} @ {fmtPrice(pos.entry)} → {last ? pnlText(pos, last) : ""}</Text> : null}
@@ -359,6 +379,196 @@ function AssetView({ t, rtl, asset, onBack, onAnalyse, inWatch, onToggleWatch, p
         {note ? <Text style={{ color: C.red, marginTop: 6 }}>{note}</Text> : null}
       </View>
     </ScrollView>
+  );
+}
+
+// ------------------------------------------------------------------ OKX connection (Settings)
+function OkxSettings({ t, rtl, okx, okxCreds, setOkxCreds, okxCfg, setOkxCfg }) {
+  const [f, setF] = useState({ key: "", secret: "", passphrase: "", demo: true });
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const [bal, setBal] = useState(null);
+
+  useEffect(() => { if (!okx) return; okx.balances().then((b) => setBal(b)).catch(() => {}); }, [okx]);
+
+  const save = async () => {
+    const c = { key: f.key.trim(), secret: f.secret.trim(), passphrase: f.passphrase.trim(), demo: f.demo };
+    if (!c.key || !c.secret || !c.passphrase) return;
+    setBusy(true); setMsg(null);
+    try {
+      const b = await createOkx(c).balances();
+      await secure.set(c); setOkxCreds(c); setBal(b); setF({ key: "", secret: "", passphrase: "", demo: true });
+    } catch (e) { setMsg(t.okxErr(e.code || "network")); }
+    setBusy(false);
+  };
+  const disconnect = async () => { await secure.del(); setOkxCreds(null); setBal(null); };
+
+  return (
+    <View>
+      <Text style={[st.label, rtl && st.rtl, { marginTop: 18 }]}>{t.okxTitle}</Text>
+      <View style={st.card}>
+        <Text style={[st.sub, { fontSize: 12, marginBottom: 10 }, rtl && st.rtl]}>{t.okxDesc}</Text>
+        {okxCreds ? (
+          <View>
+            <Text style={[st.body, { marginTop: 0, color: C.green, fontWeight: "800" }, rtl && st.rtl]}>{t.connected} · {okxCreds.demo ? t.demoMode : t.liveMode}</Text>
+            {bal ? <Text style={[st.body, rtl && st.rtl]}>{t.balanceUsdt}: {fmtMoney((bal.ccy.USDT && bal.ccy.USDT.avail) || 0)}</Text> : null}
+            <Text style={[st.sub, { marginTop: 10 }, rtl && st.rtl]}>{t.defaultPct}</Text>
+            <View style={[st.row, rtl && st.rowRev, { gap: 8, flexWrap: "wrap", marginTop: 6 }]}>
+              {[5, 10, 25, 50].map((p) => (
+                <Pressable key={p} style={[st.chip, okxCfg.pct === p && st.chipOn]} onPress={() => setOkxCfg({ ...okxCfg, pct: p })}>
+                  <Text style={[st.chipText, okxCfg.pct === p && { color: "#04110F" }]}>{p}%</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Pressable style={[st.chip, { marginTop: 12, alignSelf: rtl ? "flex-end" : "flex-start" }]} onPress={disconnect}><Text style={[st.chipText, { color: C.red }]}>{t.disconnect}</Text></Pressable>
+          </View>
+        ) : (
+          <View style={{ gap: 8 }}>
+            <TextInput style={st.input} placeholder={t.apiKey} placeholderTextColor={C.sub} value={f.key} onChangeText={(v) => setF({ ...f, key: v })} autoCapitalize="none" autoCorrect={false} />
+            <TextInput style={st.input} placeholder={t.apiSecret} placeholderTextColor={C.sub} value={f.secret} onChangeText={(v) => setF({ ...f, secret: v })} secureTextEntry autoCapitalize="none" autoCorrect={false} />
+            <TextInput style={st.input} placeholder={t.passphrase} placeholderTextColor={C.sub} value={f.passphrase} onChangeText={(v) => setF({ ...f, passphrase: v })} secureTextEntry autoCapitalize="none" autoCorrect={false} />
+            <View style={[st.row, rtl && st.rowRev, { justifyContent: "space-between", alignItems: "center" }]}>
+              <Text style={[st.body, { marginTop: 0 }]}>{f.demo ? t.demoMode : t.liveMode}</Text>
+              <Switch value={!f.demo} onValueChange={(v) => setF({ ...f, demo: !v })} trackColor={{ true: C.red }} />
+            </View>
+            <Text style={[st.sub, { fontSize: 12, color: f.demo ? C.sub : C.amber }, rtl && st.rtl]}>{f.demo ? t.demoNote : t.liveWarn}</Text>
+            <Pressable style={[st.cta, { marginTop: 4, paddingVertical: 12, opacity: busy ? 0.6 : 1 }]} onPress={save} disabled={busy}>
+              <Text style={[st.ctaText, { fontSize: 15 }]}>{busy ? t.testing : t.saveTest}</Text>
+            </Pressable>
+            {msg ? <Text style={{ color: C.red }}>{msg}</Text> : null}
+          </View>
+        )}
+      </View>
+    </View>
+  );
+}
+
+// ------------------------------------------------------------------ AI trade plan + confirmed execution on OKX
+function TradePlan({ t, rtl, lang, asset, base, isCrypto, okx, okxCreds, okxCfg, okxTrades, setOkxTrades }) {
+  const [plan, setPlan] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [usdtFree, setUsdtFree] = useState(null);
+  const [pct, setPct] = useState(okxCfg.pct);
+  const [confirm, setConfirm] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const [manual, setManual] = useState("20");
+  const instId = `${base}-USDT`;
+  const mine = okxTrades.filter((x) => x.instId === instId && x.demo === (okxCreds && okxCreds.demo));
+  const mode = okxCreds && okxCreds.demo ? "DEMO" : "LIVE";
+
+  const refreshBal = () => okx && okx.balances().then((b) => setUsdtFree((b.ccy.USDT && b.ccy.USDT.avail) || 0)).catch(() => {});
+  useEffect(() => { if (isCrypto) refreshBal(); }, [okx, isCrypto]);
+
+  const getPlan = async () => {
+    setLoading(true); setPlan(null); setConfirm(false); setMsg(null);
+    try { const r = await api("/plan", { method: "POST", body: JSON.stringify({ symbol: asset.symbol, name: asset.name, cgId: asset.cgId, type: asset.type, lang }) }); setPlan(r.plan); }
+    catch (e) { setMsg({ err: true, text: t.error }); }
+    setLoading(false);
+  };
+
+  const usdt = usdtFree != null ? Math.floor(usdtFree * pct) / 100 : 0;
+
+  const run = async (fn) => { setBusy(true); setMsg(null); try { await fn(); } catch (e) { setMsg({ err: true, text: t.okxErr(e.code || "network") }); } setBusy(false); refreshBal(); };
+
+  const execute = () => run(async () => {
+    const log = await executePlan(okx, { base, usdt, takeProfit: plan.takeProfit, stopLoss: plan.stopLoss });
+    setConfirm(false);
+    if (log.fill) setOkxTrades((prev) => [{ ...log, symbol: asset.symbol, open: true, source: "plan" }, ...prev]);
+    if (log.error === "oco_failed" || log.error === "oco_too_small") setMsg({ err: true, text: t.ocoFailed });
+    else if (log.error) setMsg({ err: true, text: t.okxErr(log.error) });
+    else setMsg({ err: false, text: t.done(log.qty, base, fmtPrice(log.fill.avgPx)) });
+  });
+  const manualBuy = () => run(async () => {
+    const v = Math.floor((parseFloat(manual) || 0) * 100) / 100; if (!v) return;
+    const ordId = await okx.marketBuyUsdt(instId, v);
+    await new Promise((r) => setTimeout(r, 800));
+    const o = await okx.order(instId, ordId);
+    if (o.filled > 0) setOkxTrades((prev) => [{ instId, symbol: asset.symbol, demo: okx.demo, ts: Date.now(), usdt: v, fill: o, qty: o.filled + (o.feeCcy === base ? o.fee : 0), open: true, source: "manual" }, ...prev]);
+    setMsg({ err: false, text: t.done(fmtQty(o.filled), base, fmtPrice(o.avgPx)) });
+  });
+  const close = (tr) => run(async () => {
+    await closeTrade(okx, tr);
+    setOkxTrades((prev) => prev.map((x) => (x.ts === tr.ts && x.instId === tr.instId ? { ...x, open: false, closedAt: Date.now() } : x)));
+  });
+
+  const p = plan;
+  return (
+    <View style={[st.card, { marginTop: 12 }]}>
+      <Pressable style={[st.cta, { marginTop: 0, paddingVertical: 12, opacity: loading ? 0.6 : 1 }]} onPress={getPlan} disabled={loading}>
+        <Text style={[st.ctaText, { fontSize: 15 }]}>{loading ? t.planLoading : t.planBtn}</Text>
+      </Pressable>
+      {loading ? <ActivityIndicator color={C.accent} style={{ marginTop: 10 }} /> : null}
+      {p ? (
+        <View style={{ marginTop: 12 }}>
+          <Text style={{ color: p.action === "buy" ? C.green : C.amber, fontWeight: "900", fontSize: 16, textAlign: rtl ? "right" : "left" }}>{p.action === "buy" ? t.planBuy : t.planWait}</Text>
+          {p.action === "buy" ? (
+            <View style={[st.row, rtl && st.rowRev, { flexWrap: "wrap", gap: 8, marginTop: 8 }]}>
+              <Stat label={t.entry} value={fmtPrice(p.entry)} />
+              <Stat label={t.slL} value={fmtPrice(p.stopLoss)} color={C.red} sub={`-${p.slPct}%`} />
+              <Stat label={t.tpL} value={fmtPrice(p.takeProfit)} color={C.green} sub={`+${p.tpPct}%`} />
+              <Stat label={t.rr} value={`1:${p.rr}`} sub={`${t.confidence}: ${(t.conf && t.conf[p.confidence]) || p.confidence || ""}`} />
+            </View>
+          ) : null}
+          {p.summary ? <Text style={[st.body, rtl && st.rtl]}>{p.summary}</Text> : null}
+          {p.reasons && p.reasons.length ? <Text style={[st.sub, { marginTop: 8 }, rtl && st.rtl]}>{t.reasons}: {p.reasons.map((r) => "• " + r).join("\n")}</Text> : null}
+          {p.risks && p.risks.length ? <Text style={[st.sub, { marginTop: 6, color: C.amber }, rtl && st.rtl]}>{t.risks}: {p.risks.map((r) => "• " + r).join("\n")}</Text> : null}
+          {p.timeframe ? <Text style={[st.sub, { marginTop: 6 }, rtl && st.rtl]}>{t.timeframe}: {(t.tf && t.tf[p.timeframe]) || p.timeframe}</Text> : null}
+          <Text style={[st.sub, { marginTop: 8, fontSize: 11 }, rtl && st.rtl]}>{t.planDisclaimer}</Text>
+
+          {p.action === "buy" && isCrypto ? (okx ? (
+            <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: C.line, paddingTop: 10 }}>
+              <Text style={[st.label, rtl && st.rtl]}>{t.useOfBalance} ({t.balanceUsdt}: {usdtFree != null ? fmtMoney(usdtFree) : "…"} · {mode})</Text>
+              <View style={[st.row, rtl && st.rowRev, { gap: 8, flexWrap: "wrap" }]}>
+                {[5, 10, 25, 50, 100].map((v) => (
+                  <Pressable key={v} style={[st.chip, pct === v && st.chipOn]} onPress={() => { setPct(v); setConfirm(false); }}>
+                    <Text style={[st.chipText, pct === v && { color: "#04110F" }]}>{v}%</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <Text style={[st.body, { fontWeight: "800" }, rtl && st.rtl]}>= {fmtMoney(usdt)} USDT</Text>
+              {!confirm ? (
+                <Pressable style={[st.cta, { backgroundColor: C.green, paddingVertical: 12, opacity: usdt > 0 ? 1 : 0.5 }]} disabled={!(usdt > 0) || busy} onPress={() => setConfirm(true)}>
+                  <Text style={[st.ctaText, { fontSize: 15 }]}>{t.execute}</Text>
+                </Pressable>
+              ) : (
+                <View style={{ marginTop: 10, padding: 10, borderRadius: 12, borderWidth: 2, borderColor: mode === "LIVE" ? C.red : C.amber }}>
+                  <Text style={[st.body, { marginTop: 0 }, rtl && st.rtl]}>{t.confirmTitle(mode, fmtMoney(usdt), base)}</Text>
+                  <Text style={[st.sub, { marginTop: 4 }, rtl && st.rtl]}>{t.slL} {fmtPrice(p.stopLoss)} · {t.tpL} {fmtPrice(p.takeProfit)}</Text>
+                  {mode === "LIVE" ? <Text style={{ color: C.red, marginTop: 6 }}>{t.liveWarn}</Text> : null}
+                  <View style={[st.row, rtl && st.rowRev, { gap: 8, marginTop: 10 }]}>
+                    <Pressable style={[st.btnSmall, { backgroundColor: C.green, flex: 1, opacity: busy ? 0.6 : 1 }]} disabled={busy} onPress={execute}><Text style={st.btnSmallText}>{busy ? t.executing : t.confirmBtn}</Text></Pressable>
+                    <Pressable style={[st.chip]} disabled={busy} onPress={() => setConfirm(false)}><Text style={st.chipText}>{t.cancel}</Text></Pressable>
+                  </View>
+                </View>
+              )}
+            </View>
+          ) : <Text style={[st.sub, { marginTop: 10 }, rtl && st.rtl]}>{t.notConnected}</Text>) : null}
+          {p.action === "buy" && !isCrypto ? <Text style={[st.sub, { marginTop: 10 }, rtl && st.rtl]}>{t.notCryptoOkx}</Text> : null}
+        </View>
+      ) : null}
+      {msg ? <Text style={{ color: msg.err ? C.red : C.green, marginTop: 10, fontWeight: "700", textAlign: rtl ? "right" : "left" }}>{msg.text}</Text> : null}
+
+      {isCrypto && okx ? (
+        <View style={{ marginTop: 14, borderTopWidth: 1, borderTopColor: C.line, paddingTop: 10 }}>
+          <Text style={[st.label, rtl && st.rtl]}>{t.manualTitle} · {mode}</Text>
+          <View style={[st.row, rtl && st.rowRev, { gap: 8 }]}>
+            <TextInput style={[st.input, { flex: 1 }]} keyboardType="numeric" value={manual} onChangeText={setManual} placeholder="USDT" placeholderTextColor={C.sub} />
+            <Pressable style={[st.btnSmall, { backgroundColor: C.green, opacity: busy ? 0.6 : 1 }]} disabled={busy} onPress={manualBuy}><Text style={st.btnSmallText}>{t.buyMarket}</Text></Pressable>
+          </View>
+          {mine.length ? <Text style={[st.label, { marginTop: 12 }, rtl && st.rtl]}>{t.trades}</Text> : null}
+          {mine.slice(0, 10).map((tr) => (
+            <View key={tr.ts} style={[st.row, rtl && st.rowRev, { justifyContent: "space-between", alignItems: "center", paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: C.line }]}>
+              <View style={{ flex: 1 }}>
+                <Text style={[st.body, { marginTop: 0 }, rtl && st.rtl]}>{fmtQty(tr.qty || 0)} {base} @ {tr.fill ? fmtPrice(tr.fill.avgPx) : "—"} · {tr.open ? t.tradeOpen : t.tradeClosed}</Text>
+                <Text style={[st.sub, { fontSize: 11 }, rtl && st.rtl]}>{fmtTime(new Date(tr.ts).toISOString())}{tr.sl ? ` · SL ${tr.sl} · TP ${tr.tp}` : ""}</Text>
+              </View>
+              {tr.open ? <Pressable style={[st.btnSmall, { backgroundColor: C.red, opacity: busy ? 0.6 : 1 }]} disabled={busy} onPress={() => close(tr)}><Text style={[st.btnSmallText, { color: "#fff" }]}>{t.closeTrade}</Text></Pressable> : null}
+            </View>
+          ))}
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -550,7 +760,7 @@ function Stat({ label, value, color, sub }) {
 }
 
 // ------------------------------------------------------------------ Settings
-function Settings({ t, rtl, lang, onLang, sub, daysLeft, onPlans }) {
+function Settings({ t, rtl, lang, onLang, sub, daysLeft, onPlans, okxProps }) {
   return (
     <ScrollView contentContainerStyle={{ padding: 14, paddingBottom: 40 }}>
       <Text style={[st.h1, rtl && st.rtl]}>{t.settingsTitle}</Text>
@@ -570,6 +780,7 @@ function Settings({ t, rtl, lang, onLang, sub, daysLeft, onPlans }) {
           <Pressable style={[st.chip]} onPress={() => {}}><Text style={st.chipText}>{t.restore}</Text></Pressable>
         </View>
       </View>
+      <OkxSettings t={t} rtl={rtl} {...okxProps} />
       <Text style={[st.label, rtl && st.rtl, { marginTop: 18 }]}>{t.disclaimerTitle}</Text>
       <View style={st.card}><Text style={[st.body, rtl && st.rtl]}>{t.disclaimer}</Text></View>
       <Text style={[st.sub, { marginTop: 18, textAlign: "center" }]}>{t.about} 0.1 · {t.prototypeNote}</Text>
