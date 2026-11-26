@@ -59,7 +59,12 @@ export default function App() {
   const [okxBal, setOkxBal] = useState(null);
   const [okxEvents, setOkxEventsState] = useState([]);
   const addEvent = (text) => setOkxEventsState((prev) => { const n = [{ ts: Date.now(), text }, ...prev].slice(0, 40); store.set("okxEvents", n); return n; });
-  const refreshBal = useCallback(async () => { if (!okx) { setOkxBal(null); return null; } try { const b = await okx.balances(); setOkxBal(b); return b; } catch { return null; } }, [okx]);
+  const [okxErr, setOkxErr] = useState(null); // why the balance could not be read (shown to the user instead of silently hiding it)
+  const refreshBal = useCallback(async () => {
+    if (!okx) { setOkxBal(null); setOkxErr(null); return null; }
+    try { const b = await okx.balances(); setOkxBal(b); setOkxErr(null); return b; }
+    catch (e) { setOkxErr((e && e.code) || "network"); return null; }
+  }, [okx]);
   const tradesRef = useRef(okxTrades); tradesRef.current = okxTrades;
   const langRef = useRef(lang); langRef.current = lang;
   // Coins OKX refused for this account (error 50123): remembered so Kim never proposes or tries them again.
@@ -162,7 +167,7 @@ export default function App() {
     setMission(cur);
   };
 
-  const okxProps = { okx, okxCreds, setOkxCreds, okxCfg, setOkxCfg, okxTrades, setOkxTrades, okxBal, refreshBal, okxEvents, addEvent,
+  const okxProps = { okx, okxCreds, setOkxCreds, okxCfg, setOkxCfg, okxTrades, setOkxTrades, okxBal, refreshBal, okxEvents, addEvent, okxErr,
     mission, startMission, stopMission, scanAndPick, openPosition, closeOpen, okxPending, setOkxPending, cancelPending, okxBlocked, blockCoin };
 
   // Live OKX balance (every 60 s) + AI trade manager (every 5 min) while the app is open.
@@ -238,6 +243,8 @@ export default function App() {
       <View style={[st.header, rtl && st.rowRev]}>
         <Text style={st.logo}>📈 {t.appName}</Text>
         {okxBal ? <Pressable onPress={() => setTab("portfolio")}><Text style={[st.trialPill, { color: C.green }]}>OKX ${fmtMoney(okxBal.totalUsd)}{okx && okx.demo ? " · demo" : ""}</Text></Pressable>
+          : okx ? <Pressable onPress={() => { setTab("portfolio"); refreshBal(); }}><Text style={[st.trialPill, { color: okxErr ? C.red : C.sub }]}>{okxErr ? "OKX ⚠️" : "OKX …"}</Text></Pressable>
+          : ready && !okxCreds ? <Pressable onPress={() => setTab("settings")}><Text style={[st.trialPill, { color: C.amber }]}>🔗 OKX</Text></Pressable>
           : !sub.plan && <Text style={st.trialPill}>{t.trialLeft(daysLeft)}</Text>}
       </View>
       <View style={st.fill}>
@@ -936,7 +943,7 @@ function TradePlan({ t, rtl, lang, asset, base, isCrypto, okx, okxCreds, okxCfg,
 
 
 // ------------------------------------------------------------------ Real OKX wallet (live balance) + AI manager activity
-function OkxWallet({ t, rtl, okx, okxBal, refreshBal, okxTrades, okxEvents, mission, stopMission, okxPending, cancelPending }) {
+function OkxWallet({ t, rtl, okx, okxBal, refreshBal, okxTrades, okxEvents, mission, stopMission, okxPending, cancelPending, okxErr }) {
   const [busy, setBusy] = useState(false);
   const coins = okxBal ? Object.entries(okxBal.ccy).filter(([, v]) => v.eq > 0 && (v.usd >= 0.5 || v.eq >= 1)).sort((a, b) => b[1].usd - a[1].usd) : [];
   const open = okxTrades.filter((x) => x.open && x.demo === okx.demo);
@@ -948,7 +955,8 @@ function OkxWallet({ t, rtl, okx, okxBal, refreshBal, okxTrades, okxEvents, miss
       </View>
       <View style={st.card}>
         <Text style={[st.sub, rtl && st.rtl]}>{t.totalEquity} · {okx.demo ? t.demoMode : t.liveMode}</Text>
-        <Text style={{ color: C.text, fontSize: 30, fontWeight: "900", textAlign: rtl ? "right" : "left" }}>{okxBal ? "$" + fmtMoney(okxBal.totalUsd) : "…"}</Text>
+        <Text style={{ color: C.text, fontSize: 30, fontWeight: "900", textAlign: rtl ? "right" : "left" }}>{okxBal ? "$" + fmtMoney(okxBal.totalUsd) : okxErr ? "—" : "…"}</Text>
+        {okxErr ? <Text style={{ color: C.red, marginTop: 6, textAlign: rtl ? "right" : "left" }}>{t.balanceErr(t.okxErr(okxErr), okxErr)}</Text> : null}
         {coins.length ? <Text style={[st.label, { marginTop: 10 }, rtl && st.rtl]}>{t.coins}</Text> : null}
         {coins.map(([ccy, v]) => (
           <View key={ccy} style={[st.row, rtl && st.rowRev, { justifyContent: "space-between", paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: C.line }]}>

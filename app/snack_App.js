@@ -162,6 +162,7 @@ const S = {
 // OKX connection + AI trade plan strings
 const X = {
   darija: {
+    balanceErr: (msg, code) => `ما قدرتش نقرا الرصيد من OKX (${code}): ${msg}\nورك على «حدث». إلا بقا، قطع الاتصال من الإعدادات وعاود ربط المفاتيح، وتأكد ف OKX بلي المفتاح باقي كاين وما تمسحش.`,
     blockedHint: "💡 جرب تشريها بيدك ف تطبيق OKX: إلا OKX طلب منك توافق على شي شروط ولا تحقق ديال هاد العملة، وافق وعاود. إلا حتى ف تطبيق OKX ما خلاكش، فهادي قيود ديال OKX على البلاد ديالك وما عندنا ما نديرو. غادي نتفكر هاد العملة وما نقترحهاش عليك مرة أخرى. جرب SOL ولا BTC ولا ETH.",
     soldButBuyFailed: (sold, b, why) => `⚠️ بعت ${sold} والفلوس ولاو USDT ف الحساب ديالك (ما ضاعو)، ولكن الشرا ديال ${b} ما تداش:\n${why}`,
     progress: ["كنجمع الثمن والأخبار...", "كنحلل الشارت والمؤشرات...", "كنكتب ليك الجواب..."],
@@ -208,6 +209,7 @@ const X = {
     okxErr: (c, b) => ({ "50123": `🚫 OKX ما كيخليكش تداول ${b || "هاد العملة"} من الحساب ديالك (قيود ديال البلاد على هاد العملة، ولا المفتاح ما فيهش صلاحية Trade ليها). ختار عملة أخرى.`, "50120": "🔑 المفتاح ديال API ما فيهش صلاحية Trade. ف OKX ← API، فعل Trade (بلا Withdraw) وعاود ربط.", insufficient_usdt: "الـUSDT ما كافيش ف OKX.", below_min_size: "المبلغ صغير بزاف على OKX.", plan_out_of_date: "الثمن تبدل بزاف، طلب خطة جديدة.", instrument_not_found: "هاد العملة ما كايناش ف OKX مقابل USDT.", nothing_to_sell: "ما كاين والو باش يتباع.", network: "مشكل ف الاتصال بـOKX.", "50113": "المفاتيح غالطين (Secret).", "50111": "API key غالط.", "50105": "Passphrase غالط.", "50101": "هاد المفتاح ماشي ديال هاد الوضع (Demo/Live).", "50119": "API key ما كاينش.", "51008": "الرصيد ما كافيش." }[c] || "خطأ من OKX: " + c),
   },
   ar: {
+    balanceErr: (msg, code) => `تعذّر قراءة الرصيد من OKX (${code}): ${msg}\nاضغط «تحديث». إذا استمر، اقطع الاتصال من الإعدادات وأعد ربط المفاتيح، وتأكد في OKX أن المفتاح ما زال موجودًا.`,
     blockedHint: "💡 جرّب شراءها يدويًا من تطبيق OKX: إذا طلب منك OKX الموافقة على شروط أو تحققًا لهذه العملة فوافق وأعد المحاولة. إذا منعك تطبيق OKX أيضًا فهذه قيود OKX على بلدك ولا يمكننا تجاوزها. سأتذكر هذه العملة ولن أقترحها مجددًا. جرّب SOL أو BTC أو ETH.",
     soldButBuyFailed: (sold, b, why) => `⚠️ بعت ${sold} وأصبح المبلغ USDT في حسابك (لم يضِع)، لكن شراء ${b} لم يتم:\n${why}`,
     progress: ["أجمع السعر والأخبار...", "أحلل الرسم البياني والمؤشرات...", "أكتب لك الجواب..."],
@@ -254,6 +256,7 @@ const X = {
     okxErr: (c, b) => ({ "50123": `🚫 لا يسمح OKX لحسابك بتداول ${b || "هذه العملة"} (قيود بلدك على هذه العملة أو صلاحيات المفتاح). اختر عملة أخرى.`, "50120": "🔑 مفتاح API بدون صلاحية التداول. في OKX ← API فعّل Trade (بدون سحب) وأعد الربط.", insufficient_usdt: "رصيد USDT غير كافٍ في OKX.", below_min_size: "المبلغ أصغر من الحد الأدنى في OKX.", plan_out_of_date: "تغير السعر كثيرًا، اطلب خطة جديدة.", instrument_not_found: "هذه العملة غير متاحة مقابل USDT في OKX.", nothing_to_sell: "لا يوجد ما يُباع.", network: "مشكلة في الاتصال بـOKX.", "50113": "المفتاح السري غير صحيح.", "50111": "API key غير صحيح.", "50105": "Passphrase غير صحيح.", "50101": "هذا المفتاح لا يطابق الوضع (تجريبي/حقيقي).", "50119": "API key غير موجود.", "51008": "الرصيد غير كافٍ." }[c] || "خطأ من OKX: " + c),
   },
   fr: {
+    balanceErr: (msg, code) => `Impossible de lire le solde OKX (${code}) : ${msg}\nAppuie sur « Actualiser ». Sinon, déconnecte puis reconnecte les clés dans Réglages, et vérifie sur OKX que la clé existe toujours.`,
     blockedHint: "💡 Essaie de l'acheter à la main dans l'app OKX : si OKX te demande d'accepter des conditions pour cette crypto, accepte puis réessaie. Si l'app OKX bloque aussi, c'est une restriction d'OKX pour ton pays. Je ne te la proposerai plus. Essaie SOL, BTC ou ETH.",
     soldButBuyFailed: (sold, b, why) => `⚠️ ${sold} vendu, l'argent est en USDT sur ton compte (rien de perdu), mais l'achat de ${b} a échoué :\n${why}`,
     progress: ["Je récupère le prix et les news...", "J'analyse le graphique...", "J'écris la réponse..."],
@@ -300,6 +303,7 @@ const X = {
     okxErr: (c, b) => ({ "50123": `🚫 OKX n'autorise pas ton compte à trader ${b || "cette crypto"} (restriction de pays ou permissions de la clé). Choisis une autre crypto.`, "50120": "🔑 La clé API n'a pas la permission Trade. Active Trade (sans Withdraw) dans OKX → API puis reconnecte.", insufficient_usdt: "USDT insuffisant sur OKX.", below_min_size: "Montant sous le minimum OKX.", plan_out_of_date: "Le prix a trop bougé, demande un nouveau plan.", instrument_not_found: "Paire USDT introuvable sur OKX.", nothing_to_sell: "Rien à vendre.", network: "Problème de connexion à OKX.", "50113": "Secret incorrect.", "50111": "API key incorrecte.", "50105": "Passphrase incorrecte.", "50101": "Clé ne correspond pas au mode (Démo/Réel).", "50119": "API key inexistante.", "51008": "Solde insuffisant." }[c] || "Erreur OKX : " + c),
   },
   en: {
+    balanceErr: (msg, code) => `Couldn't read your OKX balance (${code}): ${msg}\nTap Refresh. If it persists, disconnect and reconnect the keys in Settings, and check in OKX that the key still exists.`,
     blockedHint: "💡 Try buying it by hand in the OKX app: if OKX asks you to accept terms for this coin, accept and retry. If the OKX app blocks it too, it's an OKX restriction for your country that we can't bypass. I won't suggest this coin again. Try SOL, BTC or ETH.",
     soldButBuyFailed: (sold, b, why) => `⚠️ Sold ${sold}; the money is now USDT in your account (nothing lost), but buying ${b} failed:\n${why}`,
     progress: ["Fetching price and news...", "Reading the chart and indicators...", "Writing your answer..."],
@@ -444,6 +448,15 @@ function createOkx({ key, secret, passphrase, demo = true }, fetchImpl = fetch) 
   let offset = null, base = BASES[0];
 
   async function raw(method, path, body, auth = true) {
+    try { return await rawOnce(method, path, body, auth); }
+    catch (e) {
+      // Phone clock drift / expired timestamp (50102, 50112) or a dropped connection: resync time and try once more.
+      if (["50102", "50112", "50113", "network"].includes(e.code)) { if (auth) offset = null; return rawOnce(method, path, body, auth); }
+      throw e;
+    }
+  }
+
+  async function rawOnce(method, path, body, auth = true) {
     const b = body ? JSON.stringify(body) : "";
     const headers = { "Content-Type": "application/json" };
     if (demo) headers["x-simulated-trading"] = "1";
@@ -771,7 +784,12 @@ export default function App() {
   const [okxBal, setOkxBal] = useState(null);
   const [okxEvents, setOkxEventsState] = useState([]);
   const addEvent = (text) => setOkxEventsState((prev) => { const n = [{ ts: Date.now(), text }, ...prev].slice(0, 40); store.set("okxEvents", n); return n; });
-  const refreshBal = useCallback(async () => { if (!okx) { setOkxBal(null); return null; } try { const b = await okx.balances(); setOkxBal(b); return b; } catch { return null; } }, [okx]);
+  const [okxErr, setOkxErr] = useState(null); // why the balance could not be read (shown to the user instead of silently hiding it)
+  const refreshBal = useCallback(async () => {
+    if (!okx) { setOkxBal(null); setOkxErr(null); return null; }
+    try { const b = await okx.balances(); setOkxBal(b); setOkxErr(null); return b; }
+    catch (e) { setOkxErr((e && e.code) || "network"); return null; }
+  }, [okx]);
   const tradesRef = useRef(okxTrades); tradesRef.current = okxTrades;
   const langRef = useRef(lang); langRef.current = lang;
   // Coins OKX refused for this account (error 50123): remembered so Kim never proposes or tries them again.
@@ -874,7 +892,7 @@ export default function App() {
     setMission(cur);
   };
 
-  const okxProps = { okx, okxCreds, setOkxCreds, okxCfg, setOkxCfg, okxTrades, setOkxTrades, okxBal, refreshBal, okxEvents, addEvent,
+  const okxProps = { okx, okxCreds, setOkxCreds, okxCfg, setOkxCfg, okxTrades, setOkxTrades, okxBal, refreshBal, okxEvents, addEvent, okxErr,
     mission, startMission, stopMission, scanAndPick, openPosition, closeOpen, okxPending, setOkxPending, cancelPending, okxBlocked, blockCoin };
 
   // Live OKX balance (every 60 s) + AI trade manager (every 5 min) while the app is open.
@@ -950,6 +968,8 @@ export default function App() {
       <View style={[st.header, rtl && st.rowRev]}>
         <Text style={st.logo}>📈 {t.appName}</Text>
         {okxBal ? <Pressable onPress={() => setTab("portfolio")}><Text style={[st.trialPill, { color: C.green }]}>OKX ${fmtMoney(okxBal.totalUsd)}{okx && okx.demo ? " · demo" : ""}</Text></Pressable>
+          : okx ? <Pressable onPress={() => { setTab("portfolio"); refreshBal(); }}><Text style={[st.trialPill, { color: okxErr ? C.red : C.sub }]}>{okxErr ? "OKX ⚠️" : "OKX …"}</Text></Pressable>
+          : ready && !okxCreds ? <Pressable onPress={() => setTab("settings")}><Text style={[st.trialPill, { color: C.amber }]}>🔗 OKX</Text></Pressable>
           : !sub.plan && <Text style={st.trialPill}>{t.trialLeft(daysLeft)}</Text>}
       </View>
       <View style={st.fill}>
@@ -1648,7 +1668,7 @@ function TradePlan({ t, rtl, lang, asset, base, isCrypto, okx, okxCreds, okxCfg,
 
 
 // ------------------------------------------------------------------ Real OKX wallet (live balance) + AI manager activity
-function OkxWallet({ t, rtl, okx, okxBal, refreshBal, okxTrades, okxEvents, mission, stopMission, okxPending, cancelPending }) {
+function OkxWallet({ t, rtl, okx, okxBal, refreshBal, okxTrades, okxEvents, mission, stopMission, okxPending, cancelPending, okxErr }) {
   const [busy, setBusy] = useState(false);
   const coins = okxBal ? Object.entries(okxBal.ccy).filter(([, v]) => v.eq > 0 && (v.usd >= 0.5 || v.eq >= 1)).sort((a, b) => b[1].usd - a[1].usd) : [];
   const open = okxTrades.filter((x) => x.open && x.demo === okx.demo);
@@ -1660,7 +1680,8 @@ function OkxWallet({ t, rtl, okx, okxBal, refreshBal, okxTrades, okxEvents, miss
       </View>
       <View style={st.card}>
         <Text style={[st.sub, rtl && st.rtl]}>{t.totalEquity} · {okx.demo ? t.demoMode : t.liveMode}</Text>
-        <Text style={{ color: C.text, fontSize: 30, fontWeight: "900", textAlign: rtl ? "right" : "left" }}>{okxBal ? "$" + fmtMoney(okxBal.totalUsd) : "…"}</Text>
+        <Text style={{ color: C.text, fontSize: 30, fontWeight: "900", textAlign: rtl ? "right" : "left" }}>{okxBal ? "$" + fmtMoney(okxBal.totalUsd) : okxErr ? "—" : "…"}</Text>
+        {okxErr ? <Text style={{ color: C.red, marginTop: 6, textAlign: rtl ? "right" : "left" }}>{t.balanceErr(t.okxErr(okxErr), okxErr)}</Text> : null}
         {coins.length ? <Text style={[st.label, { marginTop: 10 }, rtl && st.rtl]}>{t.coins}</Text> : null}
         {coins.map(([ccy, v]) => (
           <View key={ccy} style={[st.row, rtl && st.rowRev, { justifyContent: "space-between", paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: C.line }]}>

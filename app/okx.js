@@ -91,6 +91,15 @@ export function createOkx({ key, secret, passphrase, demo = true }, fetchImpl = 
   let offset = null, base = BASES[0];
 
   async function raw(method, path, body, auth = true) {
+    try { return await rawOnce(method, path, body, auth); }
+    catch (e) {
+      // Phone clock drift / expired timestamp (50102, 50112) or a dropped connection: resync time and try once more.
+      if (["50102", "50112", "50113", "network"].includes(e.code)) { if (auth) offset = null; return rawOnce(method, path, body, auth); }
+      throw e;
+    }
+  }
+
+  async function rawOnce(method, path, body, auth = true) {
     const b = body ? JSON.stringify(body) : "";
     const headers = { "Content-Type": "application/json" };
     if (demo) headers["x-simulated-trading"] = "1";
